@@ -11,7 +11,7 @@ public class TransactTests : TestsBase
     /// </summary>
     private void PrepareCommittedJournalButNotApplied(string initial = "Initial", string transacted = "HeldBack")
     {
-        var expectedTransacted = new char[Math.Max(initial.Length, transacted.Length)];
+        char[] expectedTransacted = new char[Math.Max(initial.Length, transacted.Length)];
         initial.CopyTo(expectedTransacted);
         transacted.CopyTo(expectedTransacted);
 
@@ -164,7 +164,7 @@ public class TransactTests : TestsBase
             journaledStream.Seek(0, SeekOrigin.End); // Move to the end of the data
 
             Span<byte> buffer = stackalloc byte[10];
-            var read = journaledStream.Read(buffer);
+            int read = journaledStream.Read(buffer);
             Assert.Equal(0, read);
 
             // Write at EOF
@@ -194,14 +194,14 @@ public class TransactTests : TestsBase
 
         // Corrupt journal between header & footer
         byte[] buffer = new byte[JournalFile.Length - TransactFileHeader.StructSize - TransactFileFooter.StructSize];
-        var rng = new Random(42);
+        Random rng = new Random(42);
         rng.NextBytes(buffer);
 
         JournalFile.Seek(TransactFileHeader.StructSize, SeekOrigin.Begin);
         JournalFile.Write(buffer);
 
         // Verify the journal is detected as not being valid (corrupt data)
-        var ex = RunScenario<JournalCorruptedException>(() =>
+        JournalCorruptedException ex = RunScenario<JournalCorruptedException>(() =>
         {
             using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
         });
@@ -223,7 +223,7 @@ public class TransactTests : TestsBase
 
         // Corrupt journal entirely
         byte[] buffer = new byte[JournalFile.Length];
-        var rng = new Random(42);
+        Random rng = new Random(42);
         rng.NextBytes(buffer);
 
         JournalFile.Write(buffer);

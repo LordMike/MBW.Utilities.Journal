@@ -15,9 +15,9 @@ internal static class StreamExtensions
 
     public static string ReadFullStr(this Stream stream)
     {
-        var pos = stream.Position;
+        long pos = stream.Position;
         stream.Seek(0, SeekOrigin.Begin);
-        var res = ReadStr(stream, (int)stream.Length);
+        string res = ReadStr(stream, (int)stream.Length);
         stream.Position = pos;
         return res;
     }

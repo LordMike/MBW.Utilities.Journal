@@ -226,10 +226,10 @@ public sealed class JournaledStream : Stream
             throw new InvalidOperationException();
 
         // Trim to 65k blocks to stay within a journal segment
-        var remainingWrite = buffer.AsSpan(offset, count);
+        Span<byte> remainingWrite = buffer.AsSpan(offset, count);
         while (remainingWrite.Length > 0)
         {
-            var thisWrite = remainingWrite.Slice(0, Math.Min(ushort.MaxValue, remainingWrite.Length));
+            Span<byte> thisWrite = remainingWrite.Slice(0, Math.Min(ushort.MaxValue, remainingWrite.Length));
             remainingWrite = remainingWrite.Slice(thisWrite.Length);
 
             WriteInternal(thisWrite);

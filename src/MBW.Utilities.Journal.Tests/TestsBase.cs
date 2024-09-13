@@ -34,7 +34,7 @@ public abstract class TestsBase
     protected TException RunScenario<TException>(Action @delegate) where TException : Exception
     {
         ResetFileOffsets();
-        var except = Assert.Throws<TException>(@delegate);
+        TException except = Assert.Throws<TException>(@delegate);
         ResetFileOffsets();
 
         return except;
