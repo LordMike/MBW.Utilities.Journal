@@ -7,7 +7,7 @@ namespace MBW.Utilities.Journal.Tests;
 public class TransactTests : TestsBase
 {
     /// <summary>
-    /// Prepare a file & journal, committed - but not applied
+    /// Prepare a file &amp; journal, committed - but not applied
     /// </summary>
     private void PrepareCommittedJournalButNotApplied(string initial = "Initial", string transacted = "HeldBack")
     {

@@ -67,7 +67,7 @@ internal static class JournaledStreamHelpers
         Span<byte> tmpLocalData = new byte[footer.MaxEntryDataLength];
 
         Span<byte> tmpXxhash = stackalloc byte[sizeof(ulong)];
-        
+
         for (int i = 0; i < footer.Entries; i++)
         {
             TransactLocalHeader localHeader = journal.ReadOne<TransactLocalHeader>(tmpLocalHeader);
