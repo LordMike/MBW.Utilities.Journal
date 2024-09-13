@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>MBW.Utilities.Journal.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Dependencies, but hidden from consumers -->
+    <PackageReference Include="Jamarino.IntervalTree" Version="1.2.1" PrivateAssets="compile"/>
+    <PackageReference Include="System.IO.Hashing" Version="7.0.0" PrivateAssets="compile"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Analyzers -->
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive">
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
