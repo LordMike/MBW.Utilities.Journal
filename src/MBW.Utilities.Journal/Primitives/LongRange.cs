@@ -3,7 +3,7 @@
 namespace MBW.Utilities.Journal.Primitives;
 
 [DebuggerDisplay("Range {Start} to {End}, length {Length}")]
-public readonly struct LongRange(long start, uint length) : IEquatable<LongRange>, IComparable<LongRange>
+internal readonly struct LongRange(long start, uint length) : IEquatable<LongRange>, IComparable<LongRange>
 {
     public readonly long Start = start;
     public readonly uint Length = length;
