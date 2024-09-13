@@ -1,0 +1,58 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- Common NuGet properties -->
+  <PropertyGroup>
+    <Authors>LordMike</Authors>
+    <Company>MBWarez</Company>
+    <Copyright>Michael Bisbjerg $([System.DateTime]::Now.ToString(yyyy))</Copyright>
+  </PropertyGroup>
+
+  <!-- Release stuff -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+
+    <DebugType>portable</DebugType>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+
+    <!-- Github packages does not support symbols, so we embed pdbs in nupkg (https://github.community/t/does-github-packages-dotnet-nuget-supports-to-publish-snupkg/123286/6) -->
+    <AllowedOutputExtensionsInPackageBuildOutputFolder Condition="'$(Configuration)'=='Debug'">$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Deterministic build paths, https://devblogs.microsoft.com/dotnet/producing-packages-with-source-link/#deterministic-builds -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- Sourcelink -->
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
+  </ItemGroup>
+
+  <!-- Set copying files etc. to timeout faster -->
+  <PropertyGroup>
+    <CopyRetryCount>2</CopyRetryCount>
+    <CopyRetryDelayMilliseconds>500</CopyRetryDelayMilliseconds>
+  </PropertyGroup>
+
+  <!-- Ensure AssemblyInfo.cs can be included in <EmbedUntrackedSources> https://github.com/dotnet/sourcelink/issues/572 -->
+  <Target Name="_workaroundMsBuild1479" BeforeTargets="BeforeCompile" AfterTargets="GenerateAssemblyInfo"></Target>
+
+  <Import Project="_Imports\Local.targets" Condition="Exists('_Imports\Local.targets')" />
+
+</Project>
