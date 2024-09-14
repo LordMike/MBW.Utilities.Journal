@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Hashing;
 using System.Runtime.CompilerServices;
@@ -81,7 +81,7 @@ public sealed class JournaledStream : Stream
     }
 
     [MemberNotNullWhen(true, nameof(_journal), nameof(_journalSegments))]
-    private bool IsJournalOpened(bool open)
+    private bool IsJournalOpened(bool openIfClosed)
     {
         if (_journal != null)
         {
@@ -223,7 +223,7 @@ public sealed class JournaledStream : Stream
             throw new ArgumentException("Stream is unwriteable");
 
         if (!IsJournalOpened(true))
-            throw new InvalidOperationException();
+            throw new InvalidOperationException("Unable to open a journal for writing");
 
         // Trim to 65k blocks to stay within a journal segment
         Span<byte> remainingWrite = buffer.AsSpan(offset, count);
@@ -334,7 +334,9 @@ public sealed class JournaledStream : Stream
         if (_virtualLength == value)
             return;
 
-        IsJournalOpened(true);
+        if (!IsJournalOpened(true))
+            throw new InvalidOperationException("Unable to open a journal for writing");
+        
         _virtualLength = value;
         _virtualOffset = Math.Min(_virtualLength, _virtualOffset);
     }
