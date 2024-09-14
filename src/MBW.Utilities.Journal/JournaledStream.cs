@@ -89,7 +89,7 @@ public sealed class JournaledStream : Stream
             return true;
         }
 
-        if (!open)
+        if (!openIfClosed)
             return false;
 
         _journal = _journalStreamCreator.OpenOrCreate();
