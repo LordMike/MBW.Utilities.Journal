@@ -3,7 +3,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Hashing;
 using System.Runtime.CompilerServices;
 using Jamarino.IntervalTree;
-using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Extensions;
 using MBW.Utilities.Journal.Helpers;
 using MBW.Utilities.Journal.Primitives;
@@ -41,43 +40,13 @@ public sealed class JournaledStream : Stream
         _inner = inner;
         _journalStreamCreator = journalStreamCreator;
 
-        if (_journalStreamCreator.Exists())
-            ApplyExistingJournalIfCommitted();
+        JournaledUtilities.EnsureJournalCommitted(_inner, _journalStreamCreator);
 
         _virtualLength = _inner.Length;
         _virtualOffset = 0;
 
         long nonceValue = Random.Shared.NextInt64();
         _journalNonceValue = Unsafe.As<long, ulong>(ref nonceValue);
-    }
-
-    private void ApplyExistingJournalIfCommitted()
-    {
-        // If this is completed, commit it, else delete it
-        using Stream fsJournal = _journalStreamCreator.OpenOrCreate();
-
-        if (!JournaledStreamHelpers.TryReadHeader(fsJournal, out TransactFileHeader header))
-        {
-            // Corrupt file. The file exists, but does not have a valid header. This is unlike if the footer is missing (a partially written file)
-            throw new JournalCorruptedException("The journal file was corrupted", false);
-        }
-
-        fsJournal.Seek(-TransactFileFooter.StructSize, SeekOrigin.End);
-        if (!JournaledStreamHelpers.TryReadFooter(fsJournal, out TransactFileFooter footer))
-        {
-            // Bad file or not committed
-            _journalStreamCreator.Delete();
-            return;
-        }
-
-        if (header.Nonce != footer.HeaderNonce)
-            throw new JournalCorruptedException($"Header & footer does not match. Nonces: {header.Nonce:X8}, footer: {footer.HeaderNonce:X8}", false);
-
-        fsJournal.Seek(0, SeekOrigin.Begin);
-        JournaledStreamHelpers.ApplyJournal(_inner, fsJournal, header, footer);
-
-        // Committed
-        _journalStreamCreator.Delete();
     }
 
     [MemberNotNullWhen(true, nameof(_journal), nameof(_journalSegments))]
@@ -336,7 +305,7 @@ public sealed class JournaledStream : Stream
 
         if (!IsJournalOpened(true))
             throw new InvalidOperationException("Unable to open a journal for writing");
-        
+
         _virtualLength = value;
         _virtualOffset = Math.Min(_virtualLength, _virtualOffset);
     }

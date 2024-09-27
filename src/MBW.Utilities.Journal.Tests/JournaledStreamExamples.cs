@@ -43,6 +43,10 @@ public class JournaledStreamExamples
 
                     Assert.Equal("Hello, Journaled World!", readData);
                 }
+                
+                // Alternatively, we can ensure the journal has been applied, by using the utility
+                // After this utility has run, we know that any journal has either been applied fully or removed (if it wasn't committed by the original application)
+                JournaledUtilities.EnsureJournalCommitted(fileStream, journalPath);
             }
         }
         finally
