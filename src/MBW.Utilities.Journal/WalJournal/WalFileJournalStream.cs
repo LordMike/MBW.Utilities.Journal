@@ -119,7 +119,7 @@ internal sealed class WalFileJournalStream : JournaledStream
     public override int Read(byte[] buffer, int offset, int count)
     {
         if (!CanRead)
-            throw new ArgumentException("The underlying stream for this TransactedStream is unreadable");
+            throw new ArgumentException("The underlying stream for this " + nameof(WalFileJournalStream) + " is unreadable");
 
         // Read the original stream first
         int read = 0;
@@ -138,7 +138,7 @@ internal sealed class WalFileJournalStream : JournaledStream
             return read;
         }
 
-        // Path up the read data, with any journaled data
+        // Patch up the read data, with any journaled data
         LongRange thisRead = new LongRange(VirtualOffset, (uint)count);
         foreach (JournalSegment journalSegment in _journalSegments.Query(VirtualOffset, thisRead.End))
         {
