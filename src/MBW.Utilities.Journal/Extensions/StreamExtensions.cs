@@ -27,10 +27,4 @@ internal static class StreamExtensions
 
         return ref MemoryMarshal.AsRef<T>(buffer);
     }
-
-    public static void WriteOne<T>(this Stream stream, T value, Span<byte> buffer) where T : unmanaged
-    {
-        MemoryMarshal.Write(buffer, ref value);
-        stream.Write(buffer);
-    }
 }

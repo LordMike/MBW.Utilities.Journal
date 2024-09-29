@@ -1,10 +1,11 @@
 ﻿using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Structures;
 using MBW.Utilities.Journal.Tests.Helpers;
+using MBW.Utilities.Journal.WalJournal;
 
 namespace MBW.Utilities.Journal.Tests;
 
-public class TransactTests : TestsBase
+public class WalTests : TestsBase
 {
     /// <summary>
     /// Prepare a file &amp; journal, committed - but not applied
@@ -19,7 +20,7 @@ public class TransactTests : TestsBase
 
         RunScenario<TestStreamBlockedException>(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream.WriteStr(transacted);
             Assert.Equal(expectedTransacted, journaledStream.ReadFullStr().AsSpan());
@@ -38,7 +39,7 @@ public class TransactTests : TestsBase
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
 
@@ -64,7 +65,7 @@ public class TransactTests : TestsBase
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             // Commit without writing
             journaledStream.Commit();
@@ -82,7 +83,7 @@ public class TransactTests : TestsBase
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             // Position at the end of the current data
             journaledStream.Seek(0, SeekOrigin.End);
@@ -109,7 +110,7 @@ public class TransactTests : TestsBase
     {
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             // Write data at the start
             journaledStream.WriteStr("0123456789");
@@ -158,7 +159,7 @@ public class TransactTests : TestsBase
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             // Attempt to read at EOF
             journaledStream.Seek(0, SeekOrigin.End); // Move to the end of the data
@@ -193,17 +194,17 @@ public class TransactTests : TestsBase
         Assert.Equal("Clean", TestFile.ReadFullStr());
 
         // Corrupt journal between header & footer
-        byte[] buffer = new byte[JournalFile.Length - TransactFileHeader.StructSize - TransactFileFooter.StructSize];
+        byte[] buffer = new byte[JournalFile.Length - JournalFileHeader.StructSize - WalJournalFooter.StructSize];
         Random rng = new Random(42);
         rng.NextBytes(buffer);
 
-        JournalFile.Seek(TransactFileHeader.StructSize, SeekOrigin.Begin);
+        JournalFile.Seek(JournalFileHeader.StructSize, SeekOrigin.Begin);
         JournalFile.Write(buffer);
 
         // Verify the journal is detected as not being valid (corrupt data)
         JournalCorruptedException ex = RunScenario<JournalCorruptedException>(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
         });
 
         Assert.True(ex.OriginalFileHasBeenAltered);
@@ -231,13 +232,13 @@ public class TransactTests : TestsBase
         // Verify the journal is detected as not being valid (missing header)
         RunScenario<JournalCorruptedException>(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
         });
 
         // The journal must not be removed. The user must figure out what to do
         RunScenario<JournalCorruptedException>(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
         });
 
         // Verify that the original data is still intact
@@ -256,7 +257,7 @@ public class TransactTests : TestsBase
         // We should commit the journal at this point
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             // Original & transacted file should see "HeldBack"
             // The journal should have been replayed
@@ -277,7 +278,7 @@ public class TransactTests : TestsBase
         // A journal is made, but is not committed
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream.WriteStr("NotSeen");
 
@@ -294,7 +295,7 @@ public class TransactTests : TestsBase
         // Once reopened, the journal should be discarded
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             Assert.Equal("Initially", journaledStream.ReadFullStr());
             Assert.False(JournalFileProvider.Exists());
@@ -311,7 +312,7 @@ public class TransactTests : TestsBase
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
 
@@ -337,7 +338,7 @@ public class TransactTests : TestsBase
     {
         RunScenario(() =>
         {
-            using (JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider))
+            using (JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider))
             {
                 // Initial commit
                 journaledStream.WriteStr("Alpha");
@@ -373,7 +374,7 @@ public class TransactTests : TestsBase
     {
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream.WriteStr("Begin");
             Assert.Equal(5, journaledStream.Length);
@@ -395,7 +396,7 @@ public class TransactTests : TestsBase
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream.Seek(3, SeekOrigin.Begin);
             journaledStream.WriteStr("u");
@@ -409,7 +410,7 @@ public class TransactTests : TestsBase
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
             journaledStream.WriteStr("PostStuff");
@@ -429,7 +430,7 @@ public class TransactTests : TestsBase
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream.SetLength(8);
 

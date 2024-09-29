@@ -1,4 +1,6 @@
 #nullable enable
+abstract MBW.Utilities.Journal.JournaledStream.Commit() -> void
+abstract MBW.Utilities.Journal.JournaledStream.Rollback() -> void
 MBW.Utilities.Journal.Exceptions.JournalCorruptedException
 MBW.Utilities.Journal.Exceptions.JournalCorruptedException.JournalCorruptedException(string! message, bool originalFileHasBeenAltered) -> void
 MBW.Utilities.Journal.Exceptions.JournalCorruptedException.OriginalFileHasBeenAltered.get -> bool
@@ -7,21 +9,12 @@ MBW.Utilities.Journal.IJournalStream.Delete() -> void
 MBW.Utilities.Journal.IJournalStream.Exists() -> bool
 MBW.Utilities.Journal.IJournalStream.OpenOrCreate() -> System.IO.Stream!
 MBW.Utilities.Journal.JournaledStream
-MBW.Utilities.Journal.JournaledStream.Commit() -> void
-MBW.Utilities.Journal.JournaledStream.JournaledStream(System.IO.Stream! inner, MBW.Utilities.Journal.IJournalStream! journalStreamCreator) -> void
-MBW.Utilities.Journal.JournaledStream.JournaledStream(System.IO.Stream! inner, string! journalFilePath) -> void
-MBW.Utilities.Journal.JournaledStream.Rollback() -> void
+MBW.Utilities.Journal.JournaledStream.JournaledStream() -> void
+MBW.Utilities.Journal.JournaledStreamFactory
 MBW.Utilities.Journal.JournaledUtilities
-override MBW.Utilities.Journal.JournaledStream.CanRead.get -> bool
-override MBW.Utilities.Journal.JournaledStream.CanSeek.get -> bool
-override MBW.Utilities.Journal.JournaledStream.CanWrite.get -> bool
-override MBW.Utilities.Journal.JournaledStream.Flush() -> void
-override MBW.Utilities.Journal.JournaledStream.Length.get -> long
-override MBW.Utilities.Journal.JournaledStream.Position.get -> long
-override MBW.Utilities.Journal.JournaledStream.Position.set -> void
-override MBW.Utilities.Journal.JournaledStream.Read(byte[]! buffer, int offset, int count) -> int
-override MBW.Utilities.Journal.JournaledStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
-override MBW.Utilities.Journal.JournaledStream.SetLength(long value) -> void
-override MBW.Utilities.Journal.JournaledStream.Write(byte[]! buffer, int offset, int count) -> void
-static MBW.Utilities.Journal.JournaledUtilities.EnsureJournalCommitted(System.IO.Stream! backingStream, MBW.Utilities.Journal.IJournalStream! journalStream) -> void
-static MBW.Utilities.Journal.JournaledUtilities.EnsureJournalCommitted(System.IO.Stream! backingStream, string! journalFile) -> void
+static MBW.Utilities.Journal.JournaledStreamFactory.CreateSparseJournal(System.IO.Stream! origin, MBW.Utilities.Journal.IJournalStream! journalStream) -> MBW.Utilities.Journal.JournaledStream!
+static MBW.Utilities.Journal.JournaledStreamFactory.CreateSparseJournal(System.IO.Stream! origin, string! journalFile) -> MBW.Utilities.Journal.JournaledStream!
+static MBW.Utilities.Journal.JournaledStreamFactory.CreateWalJournal(System.IO.Stream! origin, MBW.Utilities.Journal.IJournalStream! journalStream) -> MBW.Utilities.Journal.JournaledStream!
+static MBW.Utilities.Journal.JournaledStreamFactory.CreateWalJournal(System.IO.Stream! origin, string! journalFile) -> MBW.Utilities.Journal.JournaledStream!
+static MBW.Utilities.Journal.JournaledUtilities.EnsureJournalCommitted(System.IO.Stream! origin, MBW.Utilities.Journal.IJournalStream! journalStream) -> void
+static MBW.Utilities.Journal.JournaledUtilities.EnsureJournalCommitted(System.IO.Stream! origin, string! journalFile) -> void
