@@ -2,7 +2,7 @@
 
 public interface IJournalStream
 {
-    bool Exists();
-    void Delete();
-    Stream OpenOrCreate();
+    bool Exists(string identifier);
+    void Delete(string identifier);
+    Stream OpenOrCreate(string identifier);
 }

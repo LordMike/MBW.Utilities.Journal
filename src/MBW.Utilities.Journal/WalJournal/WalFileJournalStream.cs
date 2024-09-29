@@ -56,7 +56,7 @@ internal sealed class WalFileJournalStream : JournaledStream
         if (!openIfClosed)
             return false;
 
-        _journal = _journalStreamCreator.OpenOrCreate();
+        _journal = _journalStreamCreator.OpenOrCreate(string.Empty);
         _journalSegments = new QuickIntervalTree<long, JournalSegment>();
 
         JournalFileHeader value = new JournalFileHeader
@@ -127,7 +127,7 @@ internal sealed class WalFileJournalStream : JournaledStream
         _journalWrittenSegments = 0;
         _journalMaxSegmentDataLength = 0;
 
-        _journalStreamCreator.Delete();
+        _journalStreamCreator.Delete(string.Empty);
     }
 
     public override void Flush()

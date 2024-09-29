@@ -20,11 +20,11 @@ public static class JournaledUtilities
     /// </summary>
     public static void EnsureJournalCommitted(Stream origin, IJournalStream journalStream)
     {
-        if (!journalStream.Exists())
+        if (!journalStream.Exists(string.Empty))
             return;
 
         // If this is completed, commit it, else delete it
-        using Stream fsJournal = journalStream.OpenOrCreate();
+        using Stream fsJournal = journalStream.OpenOrCreate(string.Empty);
 
         if (!JournaledStreamHelpers.TryRead(fsJournal, JournalFileConstants.HeaderMagic, out JournalFileHeader header))
         {
@@ -38,28 +38,26 @@ public static class JournaledUtilities
             if (!JournaledStreamHelpers.TryRead(fsJournal, WalJournalFileConstants.WalJournalFooterMagic, out WalJournalFooter footer))
             {
                 // Bad file or not committed
-                journalStream.Delete();
+                journalStream.Delete(string.Empty);
                 return;
             }
-            
+
             if (header.Nonce != footer.HeaderNonce)
                 throw new JournalCorruptedException($"Header & footer does not match. Nonces: {header.Nonce:X8}, footer: {footer.HeaderNonce:X8}", false);
 
             fsJournal.Seek(0, SeekOrigin.Begin);
             WalFileJournalHelpers.ApplyJournal(origin, fsJournal);
-            
+
             // Committed
-            journalStream.Delete();
-            
+            journalStream.Delete(string.Empty);
         }
         else if (header.Strategy == JournalStrategy.SparseFile)
         {
+            throw new NotImplementedException();
         }
         else
         {
             throw new InvalidOperationException("Unknown journal type: " + header.Strategy);
         }
-
-       
     }
 }

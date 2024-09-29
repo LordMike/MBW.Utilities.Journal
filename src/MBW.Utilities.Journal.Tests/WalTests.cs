@@ -73,7 +73,7 @@ public class WalTests : TestsBase
 
         // Ensure no changes are made to the file
         Assert.Equal("InitialData", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.Exists(string.Empty));
     }
 
     [Fact]
@@ -190,16 +190,18 @@ public class WalTests : TestsBase
     {
         PrepareCommittedJournalButNotApplied("Clean", "Corrupt");
 
-        Assert.True(JournalFileProvider.Exists());
+        Assert.True(JournalFileProvider.Exists(string.Empty));
         Assert.Equal("Clean", TestFile.ReadFullStr());
 
         // Corrupt journal between header & footer
-        byte[] buffer = new byte[JournalFile.Length - JournalFileHeader.StructSize - WalJournalFooter.StructSize];
+        var journalFile = JournalFileProvider.OpenOrCreate(string.Empty);
+        
+        byte[] buffer = new byte[journalFile.Length - JournalFileHeader.StructSize - WalJournalFooter.StructSize];
         Random rng = new Random(42);
         rng.NextBytes(buffer);
 
-        JournalFile.Seek(JournalFileHeader.StructSize, SeekOrigin.Begin);
-        JournalFile.Write(buffer);
+        journalFile.Seek(JournalFileHeader.StructSize, SeekOrigin.Begin);
+        journalFile.Write(buffer);
 
         // Verify the journal is detected as not being valid (corrupt data)
         JournalCorruptedException ex = RunScenario<JournalCorruptedException>(() =>
@@ -219,15 +221,17 @@ public class WalTests : TestsBase
     {
         PrepareCommittedJournalButNotApplied("Clean", "Corrupt");
 
-        Assert.True(JournalFileProvider.Exists());
+        Assert.True(JournalFileProvider.Exists(string.Empty));
         Assert.Equal("Clean", TestFile.ReadFullStr());
 
+        var journalFile = JournalFileProvider.OpenOrCreate(string.Empty);
+
         // Corrupt journal entirely
-        byte[] buffer = new byte[JournalFile.Length];
+        byte[] buffer = new byte[journalFile.Length];
         Random rng = new Random(42);
         rng.NextBytes(buffer);
 
-        JournalFile.Write(buffer);
+        journalFile.Write(buffer);
 
         // Verify the journal is detected as not being valid (missing header)
         RunScenario<JournalCorruptedException>(() =>
@@ -251,7 +255,7 @@ public class WalTests : TestsBase
         PrepareCommittedJournalButNotApplied();
 
         // File does not see "HeldBack"
-        Assert.True(JournalFileProvider.Exists());
+        Assert.True(JournalFileProvider.Exists(string.Empty));
         Assert.Equal("Initial", TestFile.ReadFullStr());
 
         // We should commit the journal at this point
@@ -263,10 +267,10 @@ public class WalTests : TestsBase
             // The journal should have been replayed
             Assert.Equal("HeldBack", TestFile.ReadFullStr());
             Assert.Equal("HeldBack", journaledStream.ReadFullStr());
-            Assert.False(JournalFileProvider.Exists());
+            Assert.False(JournalFileProvider.Exists(string.Empty));
         });
 
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.Exists(string.Empty));
         Assert.Equal("HeldBack", TestFile.ReadFullStr());
     }
 
@@ -290,7 +294,7 @@ public class WalTests : TestsBase
 
         // Original file still holds "Initially"
         Assert.Equal("Initially", TestFile.ReadFullStr());
-        Assert.True(JournalFileProvider.Exists());
+        Assert.True(JournalFileProvider.Exists(string.Empty));
 
         // Once reopened, the journal should be discarded
         RunScenario(() =>
@@ -298,11 +302,11 @@ public class WalTests : TestsBase
             using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             Assert.Equal("Initially", journaledStream.ReadFullStr());
-            Assert.False(JournalFileProvider.Exists());
+            Assert.False(JournalFileProvider.Exists(string.Empty));
         });
 
         Assert.Equal("Initially", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.Exists(string.Empty));
     }
 
     [Fact]
@@ -320,16 +324,16 @@ public class WalTests : TestsBase
             journaledStream.WriteStr("Beta");
 
             Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
-            Assert.True(JournalFileProvider.Exists());
+            Assert.True(JournalFileProvider.Exists(string.Empty));
 
             journaledStream.Rollback();
 
             // Post-rollback
-            Assert.False(JournalFileProvider.Exists());
+            Assert.False(JournalFileProvider.Exists(string.Empty));
             Assert.Equal("Alpha", journaledStream.ReadFullStr());
         });
 
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.Exists(string.Empty));
         Assert.Equal("Alpha", TestFile.ReadFullStr());
     }
 
@@ -344,28 +348,28 @@ public class WalTests : TestsBase
                 journaledStream.WriteStr("Alpha");
 
                 Assert.Equal("Alpha", journaledStream.ReadFullStr());
-                Assert.True(JournalFileProvider.Exists());
+                Assert.True(JournalFileProvider.Exists(string.Empty));
 
                 journaledStream.Commit();
 
                 // Post-commit
-                Assert.False(JournalFileProvider.Exists());
+                Assert.False(JournalFileProvider.Exists(string.Empty));
                 Assert.Equal("Alpha", journaledStream.ReadFullStr());
 
                 // Second commit
                 journaledStream.WriteStr("Beta");
                 Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
-                Assert.True(JournalFileProvider.Exists());
+                Assert.True(JournalFileProvider.Exists(string.Empty));
 
                 journaledStream.Commit();
 
                 // Post-commit
-                Assert.False(JournalFileProvider.Exists());
+                Assert.False(JournalFileProvider.Exists(string.Empty));
                 Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
             }
         });
 
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.Exists(string.Empty));
         Assert.Equal("AlphaBeta", TestFile.ReadFullStr());
     }
 
@@ -392,7 +396,7 @@ public class WalTests : TestsBase
         });
 
         Assert.Equal("BeginMidEnd", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.Exists(string.Empty));
 
         RunScenario(() =>
         {
@@ -406,7 +410,7 @@ public class WalTests : TestsBase
         });
 
         Assert.Equal("BegunMidEnd", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.Exists(string.Empty));
 
         RunScenario(() =>
         {
@@ -426,7 +430,7 @@ public class WalTests : TestsBase
         });
 
         Assert.Equal("BeganMidEndPostStuff", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.Exists(string.Empty));
 
         RunScenario(() =>
         {
@@ -440,6 +444,6 @@ public class WalTests : TestsBase
         });
 
         Assert.Equal("BeganMid", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.Exists(string.Empty));
     }
 }
