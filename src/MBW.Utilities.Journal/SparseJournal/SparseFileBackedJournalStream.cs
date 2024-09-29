@@ -4,7 +4,7 @@ internal sealed class SparseFileBackedJournalStream : JournaledStream
 {
     private Stream _origin;
 
-    public SparseFileBackedJournalStream(Stream origin, IJournalStream sparseFile)
+    public SparseFileBackedJournalStream(Stream origin, IJournalStreamFactory sparseFile)
     {
     }
 

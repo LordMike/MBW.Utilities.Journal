@@ -1,6 +1,6 @@
 ﻿namespace MBW.Utilities.Journal;
 
-public interface IJournalStream
+public interface IJournalStreamFactory
 {
     bool Exists(string identifier);
     void Delete(string identifier);

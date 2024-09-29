@@ -1,10 +1,12 @@
 namespace MBW.Utilities.Journal.Tests.Helpers;
 
-public sealed class MemoryJournal : IJournalStream
+public sealed class MemoryJournal : IJournalStreamFactory
 {
     private readonly Dictionary<string, TestStream> _streams = new(StringComparer.Ordinal);
 
     public IEnumerable<(string, TestStream)> Streams => _streams.Select(s => (s.Key, s.Value));
+
+    public bool HasAnyJournal => _streams.Count > 0;
 
     public bool Exists(string identifier) => _streams.ContainsKey(identifier);
 

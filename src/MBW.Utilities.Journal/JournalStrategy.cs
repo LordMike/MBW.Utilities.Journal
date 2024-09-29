@@ -7,7 +7,7 @@ internal enum JournalStrategy : byte
     None,
 
     /// <summary>
-    /// WAL Journal file implemented by <see cref="FileBasedJournalStream"/>
+    /// WAL Journal file implemented by <see cref="FileBasedJournalStreamFactory"/>
     /// </summary>
     WalJournalFile,
 

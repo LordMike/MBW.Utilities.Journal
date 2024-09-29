@@ -12,19 +12,19 @@ public static class JournaledUtilities
     /// </summary>
     public static void EnsureJournalCommitted(Stream origin, string journalFile)
     {
-        EnsureJournalCommitted(origin, new FileBasedJournalStream(journalFile));
+        EnsureJournalCommitted(origin, new FileBasedJournalStreamFactory(journalFile));
     }
 
     /// <summary>
     /// If a journal exists for this stream, and it was committed but not yet applied, this function will apply it. If the journal exists, but wasn't committed, it is discarded.
     /// </summary>
-    public static void EnsureJournalCommitted(Stream origin, IJournalStream journalStream)
+    public static void EnsureJournalCommitted(Stream origin, IJournalStreamFactory journalStreamFactory)
     {
-        if (!journalStream.Exists(string.Empty))
+        if (!journalStreamFactory.Exists(string.Empty))
             return;
 
         // If this is completed, commit it, else delete it
-        using Stream fsJournal = journalStream.OpenOrCreate(string.Empty);
+        using Stream fsJournal = journalStreamFactory.OpenOrCreate(string.Empty);
 
         if (!JournaledStreamHelpers.TryRead(fsJournal, JournalFileConstants.HeaderMagic, out JournalFileHeader header))
         {
@@ -38,7 +38,7 @@ public static class JournaledUtilities
             if (!JournaledStreamHelpers.TryRead(fsJournal, WalJournalFileConstants.WalJournalFooterMagic, out WalJournalFooter footer))
             {
                 // Bad file or not committed
-                journalStream.Delete(string.Empty);
+                journalStreamFactory.Delete(string.Empty);
                 return;
             }
 
@@ -49,7 +49,7 @@ public static class JournaledUtilities
             WalFileJournalHelpers.ApplyJournal(origin, fsJournal);
 
             // Committed
-            journalStream.Delete(string.Empty);
+            journalStreamFactory.Delete(string.Empty);
         }
         else if (header.Strategy == JournalStrategy.SparseFile)
         {

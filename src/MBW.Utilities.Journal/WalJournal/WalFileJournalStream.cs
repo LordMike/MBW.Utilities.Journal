@@ -14,7 +14,7 @@ internal sealed class WalFileJournalStream : JournaledStream
     private record struct JournalSegment(long InnerOffset, long JournalOffset, ushort Length);
 
     private readonly Stream _origin;
-    private readonly IJournalStream _journalStreamCreator;
+    private readonly IJournalStreamFactory _journalStreamFactory;
     private Stream? _journal;
     private readonly ulong _journalNonceValue;
     private QuickIntervalTree<long, JournalSegment>? _journalSegments;
@@ -25,7 +25,7 @@ internal sealed class WalFileJournalStream : JournaledStream
     private long _virtualOffset;
     private long _virtualLength;
 
-    public WalFileJournalStream(Stream origin, IJournalStream journalStreamCreator)
+    public WalFileJournalStream(Stream origin, IJournalStreamFactory journalStreamFactory)
     {
         if (origin is { CanWrite: false, CanRead: false })
             throw new ArgumentException("Must be able to write or read from inner", nameof(origin));
@@ -33,9 +33,9 @@ internal sealed class WalFileJournalStream : JournaledStream
             throw new ArgumentException("Must be able to seek from inner", nameof(origin));
 
         _origin = origin;
-        _journalStreamCreator = journalStreamCreator;
+        _journalStreamFactory = journalStreamFactory;
 
-        JournaledUtilities.EnsureJournalCommitted(_origin, _journalStreamCreator);
+        JournaledUtilities.EnsureJournalCommitted(_origin, _journalStreamFactory);
 
         _virtualLength = _origin.Length;
         _virtualOffset = 0;
@@ -56,7 +56,7 @@ internal sealed class WalFileJournalStream : JournaledStream
         if (!openIfClosed)
             return false;
 
-        _journal = _journalStreamCreator.OpenOrCreate(string.Empty);
+        _journal = _journalStreamFactory.OpenOrCreate(string.Empty);
         _journalSegments = new QuickIntervalTree<long, JournalSegment>();
 
         JournalFileHeader value = new JournalFileHeader
@@ -127,7 +127,7 @@ internal sealed class WalFileJournalStream : JournaledStream
         _journalWrittenSegments = 0;
         _journalMaxSegmentDataLength = 0;
 
-        _journalStreamCreator.Delete(string.Empty);
+        _journalStreamFactory.Delete(string.Empty);
     }
 
     public override void Flush()
