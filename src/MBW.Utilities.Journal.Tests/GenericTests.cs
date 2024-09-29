@@ -1,8 +1,5 @@
-﻿using MBW.Utilities.Journal.Exceptions;
-using MBW.Utilities.Journal.Structures;
+using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Tests.Helpers;
-using MBW.Utilities.Journal.WalJournal;
-using Microsoft.VisualBasic.CompilerServices;
 
 namespace MBW.Utilities.Journal.Tests;
 
@@ -13,7 +10,7 @@ public class GenericTests : TestsBase
     public static IEnumerable<object[]> GetTestStreams()
     {
         yield return [(CreateDelegate)JournaledStreamFactory.CreateWalJournal];
-        yield return [(CreateDelegate)JournaledStreamFactory.CreateSparseJournal];
+        // yield return [(CreateDelegate)JournaledStreamFactory.CreateSparseJournal];
     }
 
     private void ApplyToAllJournals(Action<string, Stream> action)

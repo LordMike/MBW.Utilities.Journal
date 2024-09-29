@@ -12,7 +12,7 @@ internal enum JournalStrategy : byte
     WalJournalFile,
 
     /// <summary>
-    /// Sparse file approach implemented by <see cref="SparseFileBackedJournalStream"/>
+    /// Sparse file approach implemented by <see cref="SparseJournalStream"/>
     /// </summary>
     SparseFile
 }
