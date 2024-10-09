@@ -27,4 +27,21 @@ internal static class StreamExtensions
 
         return ref MemoryMarshal.AsRef<T>(buffer);
     }
+
+    public static int ReadUpTo(this Stream source, Span<byte> buffer)
+    {
+        int totalRead = 0;
+        while (buffer.Length > 0)
+        {
+            var read = source.Read(buffer);
+            totalRead += read;
+
+            if (read <= 0)
+                return totalRead;
+
+            buffer = buffer.Slice(read);
+        }
+
+        return totalRead;
+    }
 }

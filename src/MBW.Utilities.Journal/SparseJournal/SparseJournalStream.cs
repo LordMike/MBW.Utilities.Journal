@@ -32,7 +32,7 @@ internal sealed class SparseJournalStream : JournaledStream
         Span<ulong> bitmapSpan = CollectionsMarshal.AsSpan(_sparseBitmap);
         return MemoryMarshal.AsBytes(bitmapSpan);
     }
-    
+
     [MemberNotNullWhen(true, nameof(_sparseJournal), nameof(_sparseBitmap))]
     protected override bool IsJournalOpened(bool openIfClosed)
     {
@@ -136,7 +136,7 @@ internal sealed class SparseJournalStream : JournaledStream
     {
         if (!CanRead)
             throw new ArgumentException("The underlying stream for this " + nameof(SparseJournalStream) + " is unreadable");
-        
+
         // Read the original stream first
         int read = 0;
         Span<byte> tmpBuffer = buffer.AsSpan().Slice(offset, count);
@@ -154,13 +154,18 @@ internal sealed class SparseJournalStream : JournaledStream
             return read;
         }
 
+        // Prepare buffer in multiple of blockSize bytes
+        // Read in origin
+        // Copy over already journaled data
+
+        // Copy buffer to target
+
+
         var readFirstBlock = VirtualOffset / _blockSizeBytes;
-        
+
         // Patch up the read data, with any journaled data
         var bitmapBytes = GetBitmapBytes();
-        
-        
-        
+
         // Calculate the number of bytes read
         // This will be from the offset we had, until the length of the stream or count of bytes wanted, whatever comes first
         // long availableBytes = VirtualLength - thisRead.Start;
@@ -171,6 +176,61 @@ internal sealed class SparseJournalStream : JournaledStream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        throw new NotImplementedException();
+        // Prepare buffer in multiple of blockSize bytes
+        var alignedOffset = (VirtualOffset / _blockSizeBytes) * _blockSizeBytes;
+        var blockSizeAlignedSize = (count + _blockSizeBytes - 1) / _blockSizeBytes;
+        byte[] tmpBuffer = new byte[blockSizeAlignedSize];
+
+        // Read in origin
+        var originToRead = Math.Clamp(Origin.Length - VirtualOffset, 0, tmpBuffer.Length);
+
+        if (originToRead > 0)
+        {
+            Origin.Seek(alignedOffset, SeekOrigin.Begin);
+            Origin.ReadUpTo(tmpBuffer);
+        }
+
+        // Copy over already journaled data
+        var journalToRead = Math.Clamp(Jourstre.Length - VirtualOffset, 0, tmpBuffer.Length);
+
+        // Copy over source buffer
+        // Write out
+        // Mark bitmap
+    }
+
+    private void ReadJournaledBlocks(Span<byte> buffer, long alignedOffset)
+    {
+        Debug.Assert(alignedOffset % _blockSizeBytes == 0);
+        Debug.Assert(buffer.Length % _blockSizeBytes == 0);
+
+        // Read in origin
+        var originToRead = Math.Clamp(Origin.Length - alignedOffset, 0, buffer.Length);
+
+        if (originToRead > 0)
+        {
+            Origin.Seek(alignedOffset, SeekOrigin.Begin);
+            Origin.ReadUpTo(buffer);
+        }
+
+        // Copy over already journaled data
+        if (IsJournalOpened(false))
+        {
+            // TODO: Check if any blocks are modified before reading
+            
+            var journalOffset = GetJournalOffset(alignedOffset);
+            var journalToRead = Math.Clamp(_sparseJournal.Length - journalOffset, 0, buffer.Length);
+            if (journalToRead > 0)
+            {
+                Span<byte> journalBuffer = new byte[journalToRead];
+                _sparseJournal.Seek(journalOffset, SeekOrigin.Begin);
+                var read = _sparseJournal.ReadUpTo(journalBuffer);
+                
+                // Copy over 
+            }
+        }
+
+        // Copy over source buffer
+        // Write out
+        // Mark bitmap
     }
 }
