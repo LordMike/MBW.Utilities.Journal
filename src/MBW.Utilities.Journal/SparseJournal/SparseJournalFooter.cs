@@ -15,7 +15,7 @@ internal struct SparseJournalFooter : IStructWithMagic<ulong>
     /// Size of individual chunks, in a power of 2. The size is `pow(BlockSize, 2)`
     /// </summary>
     public required byte BlockSize;
-    public required uint BlockCount;
+    public required uint BitmapLengthUlongs;
     public required ulong StartOfBitmap;
     
     ulong IStructWithMagic<ulong>.Magic => Magic;

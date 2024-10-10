@@ -1,5 +1,6 @@
 ﻿using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Helpers;
+using MBW.Utilities.Journal.SparseJournal;
 using MBW.Utilities.Journal.Structures;
 using MBW.Utilities.Journal.WalJournal;
 
@@ -48,12 +49,27 @@ public static class JournaledUtilities
             fsJournal.Seek(0, SeekOrigin.Begin);
             WalFileJournalHelpers.ApplyJournal(origin, fsJournal);
 
-            // Committed
+            // Applied
             journalStreamFactory.Delete(string.Empty);
         }
         else if (header.Strategy == JournalStrategy.SparseFile)
         {
-            throw new NotImplementedException();
+            fsJournal.Seek(-SparseJournalFooter.StructSize, SeekOrigin.End);
+            if (!JournaledStreamHelpers.TryRead(fsJournal, SparseJournalFileConstants.SparseJournalFooterMagic, out SparseJournalFooter footer))
+            {
+                // Bad file or not committed
+                journalStreamFactory.Delete(string.Empty);
+                return;
+            }
+
+            if (header.Nonce != footer.HeaderNonce)
+                throw new JournalCorruptedException($"Header & footer does not match. Nonces: {header.Nonce:X8}, footer: {footer.HeaderNonce:X8}", false);
+
+            fsJournal.Seek(0, SeekOrigin.Begin);
+            SparseJournalHelpers.ApplyJournal(origin, fsJournal, header, footer);
+
+            // Applied
+            journalStreamFactory.Delete(string.Empty);
         }
         else
         {
