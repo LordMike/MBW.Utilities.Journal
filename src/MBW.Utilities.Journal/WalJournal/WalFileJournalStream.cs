@@ -116,20 +116,18 @@ internal sealed class WalFileJournalStream : JournaledStream
         Origin.Flush();
     }
 
-    public override int Read(byte[] buffer, int offset, int count)
+    public override int Read(Span<byte> buffer)
     {
         if (!CanRead)
             throw new ArgumentException("The underlying stream for this " + nameof(WalFileJournalStream) + " is unreadable");
 
         // Read the original stream first
         int read = 0;
-        Span<byte> tmpBuffer = buffer.AsSpan().Slice(offset, count);
-
-        long readFromInner = Math.Clamp(Origin.Length - VirtualOffset, 0, count);
+        long readFromInner = Math.Clamp(Origin.Length - VirtualOffset, 0, buffer.Length);
         if (readFromInner > 0)
         {
             Origin.Seek(VirtualOffset, SeekOrigin.Begin);
-            read = Origin.Read(tmpBuffer);
+            read = Origin.Read(buffer);
         }
 
         if (!IsJournalOpened(false))
@@ -139,7 +137,7 @@ internal sealed class WalFileJournalStream : JournaledStream
         }
 
         // Patch up the read data, with any journaled data
-        LongRange thisRead = new LongRange(VirtualOffset, (uint)count);
+        LongRange thisRead = new LongRange(VirtualOffset, (uint)buffer.Length);
         foreach (JournalSegment journalSegment in _journalSegments.Query(VirtualOffset, thisRead.End))
         {
             // Calculate area in inner, covered by this segment
@@ -152,7 +150,7 @@ internal sealed class WalFileJournalStream : JournaledStream
 
             // Prepare a view of buffer, that matches this segment
             long patchBufferStart = thisSegmentIntersect.Start - VirtualOffset;
-            Span<byte> patchBuffer = tmpBuffer.Slice((int)patchBufferStart, (int)thisSegmentIntersect.Length);
+            Span<byte> patchBuffer = buffer.Slice((int)patchBufferStart, (int)thisSegmentIntersect.Length);
 
             _journal.Seek(journalRange.Start, SeekOrigin.Begin);
             _journal.ReadExactly(patchBuffer);
@@ -164,7 +162,7 @@ internal sealed class WalFileJournalStream : JournaledStream
         return (int)Math.Min(availableBytes, thisRead.Length);
     }
 
-    public override void Write(byte[] buffer, int offset, int count)
+    public override void Write(ReadOnlySpan<byte> buffer)
     {
         if (!CanWrite)
             throw new ArgumentException("Stream is unwriteable");
@@ -173,11 +171,11 @@ internal sealed class WalFileJournalStream : JournaledStream
             throw new InvalidOperationException("Unable to open a journal for writing");
 
         // Trim to 65k blocks to stay within a journal segment
-        Span<byte> remainingWrite = buffer.AsSpan(offset, count);
+        ReadOnlySpan<byte> remainingWrite = buffer;
         while (remainingWrite.Length > 0)
         {
-            Span<byte> thisWrite = remainingWrite.Slice(0, Math.Min(ushort.MaxValue, remainingWrite.Length));
-            remainingWrite = remainingWrite.Slice(thisWrite.Length);
+            ReadOnlySpan<byte> thisWrite = remainingWrite[..Math.Min(ushort.MaxValue, remainingWrite.Length)];
+            remainingWrite = remainingWrite[thisWrite.Length..];
 
             WriteInternal(thisWrite);
         }

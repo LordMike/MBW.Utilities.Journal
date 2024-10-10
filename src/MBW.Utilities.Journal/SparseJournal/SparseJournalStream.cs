@@ -128,16 +128,15 @@ internal sealed class SparseJournalStream : JournaledStream
             _sparseJournal.Flush();
     }
 
-    public override int Read(byte[] buffer, int offset, int count)
+    public override int Read(Span<byte> buffer)
     {
-        // TODO: Implement ReadOnlySpan read/write overloads
         // TODO: Use bitwise ANDs to align to blocksize
         // TODO: Use input buffers if possible, allow smaller than blocksize?
         // TODO: Calculate ranges of dirty when read, avoid blockwise read; wait till "not dirty" to read, to simplify code
         if (!CanRead)
             throw new ArgumentException("The underlying stream for this " + nameof(SparseJournalStream) + " is unreadable");
 
-        int maxToRead = (int)(Math.Min(VirtualOffset + count, VirtualLength) - VirtualOffset);
+        int maxToRead = (int)(Math.Min(VirtualOffset + buffer.Length, VirtualLength) - VirtualOffset);
         if (maxToRead <= 0)
             return 0;
 
@@ -155,25 +154,25 @@ internal sealed class SparseJournalStream : JournaledStream
         Span<byte> alignedView = alignedBuffer.Slice((int)(VirtualOffset - alignedOffset));
         alignedView = alignedView.Slice(0, maxToRead);
 
-        Span<byte> targetBuffer = buffer.AsSpan().Slice(offset, maxToRead);
+        Span<byte> targetBuffer = buffer[..maxToRead];
         alignedView.CopyTo(targetBuffer);
 
         VirtualOffset += maxToRead;
         return maxToRead;
     }
 
-    public override void Write(byte[] buffer, int offset, int count)
+    public override void Write(ReadOnlySpan<byte> buffer)
     {
         // Prepare buffer in multiple of blockSize bytes
         long alignedOffset = (VirtualOffset / _blockSizeBytes) * _blockSizeBytes;
-        int alignedSize = (int)((count + _blockSizeBytes - 1) / _blockSizeBytes) * (int)_blockSizeBytes;
+        int alignedSize = (int)((buffer.Length + _blockSizeBytes - 1) / _blockSizeBytes) * (int)_blockSizeBytes;
         Span<byte> alignedBuffer = new byte[alignedSize];
 
         // Read in origin and overlay the journaled data
         ReadAlignedBlocks(alignedBuffer, alignedOffset);
 
         // Copy over source buffer
-        buffer.AsSpan(offset, count).CopyTo(alignedBuffer.Slice((int)(VirtualOffset - alignedOffset), count));
+        buffer.CopyTo(alignedBuffer.Slice((int)(VirtualOffset - alignedOffset), buffer.Length));
 
         // Write out to journal
         if (IsJournalOpened(true))
@@ -192,7 +191,7 @@ internal sealed class SparseJournalStream : JournaledStream
             }
         }
 
-        VirtualOffset += count;
+        VirtualOffset += buffer.Length;
         VirtualLength = Math.Max(VirtualLength, VirtualOffset);
     }
 

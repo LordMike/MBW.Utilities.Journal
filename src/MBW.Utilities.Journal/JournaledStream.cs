@@ -16,15 +16,28 @@ public abstract class JournaledStream : Stream
 
         Origin = origin;
         JournalStreamFactory = journalStreamFactory;
-        
+
         JournaledUtilities.EnsureJournalCommitted(Origin, JournalStreamFactory);
-        
+
         VirtualLength = Origin.Length;
         VirtualOffset = 0;
     }
-    
+
     public abstract void Commit();
     public abstract void Rollback();
+
+    public abstract override int Read(Span<byte> buffer);
+    public abstract override void Write(ReadOnlySpan<byte> buffer);
+    
+    /// <summary>
+    /// Note: Sealed to force overriding the Span&lt;&gt; overloads instead
+    /// </summary>
+    public sealed override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan().Slice(offset, count));
+    
+    /// <summary>
+    /// Note: Sealed to force overriding the Span&lt;&gt; overloads instead
+    /// </summary>
+    public sealed override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan().Slice(offset, count));
 
     protected abstract bool IsJournalOpened(bool openIfClosed);
 

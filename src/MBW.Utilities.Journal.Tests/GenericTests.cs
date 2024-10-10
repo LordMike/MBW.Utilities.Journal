@@ -9,7 +9,7 @@ public class GenericTests : TestsBase
 
     public static IEnumerable<object[]> GetTestStreams()
     {
-        // yield return [(CreateDelegate)JournaledStreamFactory.CreateWalJournal];
+        yield return [(CreateDelegate)JournaledStreamFactory.CreateWalJournal];
         yield return [(CreateDelegate)JournaledStreamFactory.CreateSparseJournal];
     }
 
