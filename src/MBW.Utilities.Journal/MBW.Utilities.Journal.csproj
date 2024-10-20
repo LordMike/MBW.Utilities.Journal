@@ -4,6 +4,7 @@
     <TargetFramework>net7.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,6 +16,10 @@
   <ItemGroup>
     <!-- Dependencies, but hidden from consumers -->
     <PackageReference Include="Jamarino.IntervalTree" Version="1.2.1" PrivateAssets="compile"/>
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.106">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="System.IO.Hashing" Version="8.0.0" PrivateAssets="compile" />
   </ItemGroup>
 
@@ -22,6 +27,11 @@
     <!-- Analyzers -->
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
     <PackageReference Include="Roslynator.Analyzers" Version="4.12.4" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="NativeMethods.txt" />
+    <AdditionalFiles Include="NativeMethods.txt" />
   </ItemGroup>
   
 </Project>

@@ -9,5 +9,6 @@ public static class JournaledStreamFactory
     public static JournaledStream CreateWalJournal(Stream origin, IJournalStreamFactory journalStreamFactory) => new WalFileJournalStream(origin, journalStreamFactory);
 
     public static JournaledStream CreateSparseJournal(Stream origin, string journalFile) => CreateSparseJournal(origin, new FileBasedJournalStreamFactory(journalFile));
-    public static JournaledStream CreateSparseJournal(Stream origin, IJournalStreamFactory journalStreamFactory) => new SparseJournalStream(origin, journalStreamFactory);
+    public static JournaledStream CreateSparseJournal(Stream origin, IJournalStreamFactory journalStreamFactory) => CreateSparseJournal(origin, journalStreamFactory, 12);
+    public static JournaledStream CreateSparseJournal(Stream origin, IJournalStreamFactory journalStreamFactory, byte blockSize) => new SparseJournalStream(origin, journalStreamFactory, blockSize);
 }

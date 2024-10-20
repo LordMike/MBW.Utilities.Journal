@@ -1,4 +1,6 @@
-﻿namespace MBW.Utilities.Journal;
+﻿using MBW.Utilities.Journal.SparseJournal;
+
+namespace MBW.Utilities.Journal;
 
 /// <summary>
 /// A provider for a journal file based on a filesystem file
@@ -11,5 +13,11 @@ internal sealed class FileBasedJournalStreamFactory(string file) : IJournalStrea
 
     public void Delete(string identifier) => File.Delete(GetFileName(identifier));
 
-    public Stream OpenOrCreate(string identifier) => File.Open(GetFileName(identifier), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read | FileShare.Delete);
+    public Stream OpenOrCreate(string identifier)
+    {
+        FileStream fsStream = File.Open(GetFileName(identifier), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read | FileShare.Delete);
+        SparseStreamHelper.MakeStreamSparse(fsStream);
+
+        return fsStream;
+    }
 }

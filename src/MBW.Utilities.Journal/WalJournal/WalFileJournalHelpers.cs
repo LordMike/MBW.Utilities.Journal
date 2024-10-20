@@ -8,7 +8,7 @@ namespace MBW.Utilities.Journal.WalJournal;
 
 internal static class WalFileJournalHelpers
 {
-    internal static void ApplyJournal(Stream inner, Stream journal)
+    internal static void ApplyJournal(Stream origin, Stream journal)
     {
         if (!JournaledStreamHelpers.TryRead(journal, JournalFileConstants.HeaderMagic, out JournalFileHeader header))
         {
@@ -26,19 +26,19 @@ internal static class WalFileJournalHelpers
         if (header.Nonce != footer.HeaderNonce)
             throw new InvalidOperationException($"Header & footer does not match. Nonces: {header.Nonce:X8}, footer: {footer.HeaderNonce:X8}");
 
-        ApplyJournal(inner, journal, header, footer);
+        ApplyJournal(origin, journal, header, footer);
     }
 
-    internal static void ApplyJournal(Stream inner, Stream journal, JournalFileHeader header, WalJournalFooter footer)
+    internal static void ApplyJournal(Stream origin, Stream journal, JournalFileHeader header, WalJournalFooter footer)
     {
         // Seek to begin of data
         journal.Seek(JournalFileHeader.StructSize, SeekOrigin.Begin);
 
         // Truncate the original to ensure it fits our desired length
         bool targetHasBeenAltered = false;
-        if (inner.Length != footer.FinalLength)
+        if (origin.Length != footer.FinalLength)
         {
-            inner.SetLength(footer.FinalLength);
+            origin.SetLength(footer.FinalLength);
             targetHasBeenAltered = true;
         }
 
@@ -70,10 +70,12 @@ internal static class WalFileJournalHelpers
             {
                 thisJournalData = thisJournalData.Slice(0, (int)toWriteToInner);
 
-                inner.Seek(localHeader.InnerOffset, SeekOrigin.Begin);
-                inner.Write(thisJournalData);
+                origin.Seek(localHeader.InnerOffset, SeekOrigin.Begin);
+                origin.Write(thisJournalData);
                 targetHasBeenAltered = true;
             }
         }
+        
+        origin.Flush();
     }
 }

@@ -17,8 +17,8 @@ internal sealed class SparseJournalStream : JournaledStream
 
     public SparseJournalStream(Stream origin, IJournalStreamFactory journalStreamFactory, byte blockSize = 12) : base(origin, journalStreamFactory)
     {
-        if (blockSize is < 10 or > 24)
-            throw new ArgumentOutOfRangeException(nameof(blockSize), blockSize, "The blocksize should be in the range 10..24");
+        if (blockSize is < 8 or > 24)
+            throw new ArgumentOutOfRangeException(nameof(blockSize), blockSize, "The blocksize should be in the range 8..24");
 
         _blockSize = BlockSize.FromPowerOfTwo(blockSize);
         _journalNonceValue = unchecked((ulong)Random.Shared.NextInt64());
@@ -142,11 +142,12 @@ internal sealed class SparseJournalStream : JournaledStream
             return 0;
 
         // Prepare an aligned buffer to do block-sized reads
-        long alignedSize = (long)_blockSize.RoundUpToNearestBlockMinimumOne((ulong)maxToRead);
+        // The alignedSize must be large enough to cover both ends of an unaligned write
         long alignedOffset = (long)_blockSize.RoundDownToNearestBlock((ulong)VirtualOffset);
+        int alignedSize = (int)(_blockSize.RoundUpToNearestBlock((ulong)(VirtualOffset + buffer.Length)) - (ulong)alignedOffset);
         Span<byte> alignedBuffer = new byte[alignedSize]; // TODO: Use buffer parameter if it matches exactly, to support aligned reads like BufferStream
 
-        Debug.Assert(alignedOffset + alignedBuffer.Length > VirtualOffset + maxToRead, "Ensure we have enough space to cover the virtual read");
+        Debug.Assert(alignedOffset + alignedBuffer.Length >= VirtualOffset + maxToRead, "Ensure we have enough space to cover the virtual read");
 
         // Read from the original stream and overlay the original
         ReadAlignedBlocks(alignedBuffer, alignedOffset);
@@ -168,8 +169,9 @@ internal sealed class SparseJournalStream : JournaledStream
             return;
 
         // Prepare buffer in multiple of blockSize bytes
+        // The alignedSize must be large enough to cover both ends of an unaligned write
         long alignedOffset = (long)_blockSize.RoundDownToNearestBlock((ulong)VirtualOffset);
-        int alignedSize = (int)_blockSize.RoundUpToNearestBlock((ulong)buffer.Length);
+        int alignedSize = (int)(_blockSize.RoundUpToNearestBlock((ulong)(VirtualOffset + buffer.Length)) - (ulong)alignedOffset);
         Span<byte> alignedBuffer = new byte[alignedSize];
 
         // Read in origin and overlay the journaled data
@@ -179,19 +181,19 @@ internal sealed class SparseJournalStream : JournaledStream
         buffer.CopyTo(alignedBuffer.Slice((int)(VirtualOffset - alignedOffset), buffer.Length));
 
         // Write out to journal
-        if (IsJournalOpened(true))
-        {
-            long journalOffset = GetJournalOffset(alignedOffset);
-            _sparseJournal.Seek(journalOffset, SeekOrigin.Begin);
-            _sparseJournal.Write(alignedBuffer);
+        if (!IsJournalOpened(true))
+            throw new InvalidOperationException("Unable to open a journal for writing");
 
-            // Mark all affected blocks as dirty
-            uint firstBlock = _blockSize.GetBlockCountRoundUp((ulong)alignedOffset);
-            uint lastBlock = _blockSize.GetBlockCountRoundUp((ulong)(alignedOffset + alignedSize));
+        long journalOffset = GetJournalOffset(alignedOffset);
+        _sparseJournal.Seek(journalOffset, SeekOrigin.Begin);
+        _sparseJournal.Write(alignedBuffer);
 
-            for (uint block = firstBlock; block < lastBlock; block++)
-                SetDirty(block);
-        }
+        // Mark all affected blocks as dirty
+        uint firstBlock = _blockSize.GetBlockCountRoundUp((ulong)alignedOffset);
+        uint lastBlock = _blockSize.GetBlockCountRoundUp((ulong)(alignedOffset + alignedSize));
+
+        for (uint block = firstBlock; block < lastBlock; block++)
+            SetDirty(block);
 
         VirtualOffset += buffer.Length;
         VirtualLength = Math.Max(VirtualLength, VirtualOffset);

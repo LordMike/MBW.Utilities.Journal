@@ -12,9 +12,10 @@ MBW.Utilities.Journal.JournaledStream
 MBW.Utilities.Journal.JournaledStream.JournaledStream() -> void
 MBW.Utilities.Journal.JournaledStreamFactory
 MBW.Utilities.Journal.JournaledUtilities
-static MBW.Utilities.Journal.JournaledStreamFactory.CreateSparseJournal(System.IO.Stream! origin, MBW.Utilities.Journal.IJournalStream! journalStream) -> MBW.Utilities.Journal.JournaledStream!
+static MBW.Utilities.Journal.JournaledStreamFactory.CreateSparseJournal(System.IO.Stream! origin, MBW.Utilities.Journal.IJournalStreamFactory! journalStreamFactory) -> MBW.Utilities.Journal.JournaledStream!
+static MBW.Utilities.Journal.JournaledStreamFactory.CreateSparseJournal(System.IO.Stream! origin, MBW.Utilities.Journal.IJournalStreamFactory! journalStreamFactory, byte blockSize) -> MBW.Utilities.Journal.JournaledStream!
 static MBW.Utilities.Journal.JournaledStreamFactory.CreateSparseJournal(System.IO.Stream! origin, string! journalFile) -> MBW.Utilities.Journal.JournaledStream!
-static MBW.Utilities.Journal.JournaledStreamFactory.CreateWalJournal(System.IO.Stream! origin, MBW.Utilities.Journal.IJournalStream! journalStream) -> MBW.Utilities.Journal.JournaledStream!
+static MBW.Utilities.Journal.JournaledStreamFactory.CreateWalJournal(System.IO.Stream! origin, MBW.Utilities.Journal.IJournalStreamFactory! journalStreamFactory) -> MBW.Utilities.Journal.JournaledStream!
 static MBW.Utilities.Journal.JournaledStreamFactory.CreateWalJournal(System.IO.Stream! origin, string! journalFile) -> MBW.Utilities.Journal.JournaledStream!
 static MBW.Utilities.Journal.JournaledUtilities.EnsureJournalCommitted(System.IO.Stream! origin, MBW.Utilities.Journal.IJournalStream! journalStream) -> void
 static MBW.Utilities.Journal.JournaledUtilities.EnsureJournalCommitted(System.IO.Stream! origin, string! journalFile) -> void

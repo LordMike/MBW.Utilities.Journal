@@ -1,8 +1,10 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace MBW.Utilities.Journal.Helpers;
 
+[DebuggerDisplay("BlockSize 2^{Power} => {Size}")]
 internal readonly struct BlockSize
 {
     public readonly byte Power;
@@ -13,7 +15,7 @@ internal readonly struct BlockSize
     {
         Power = power;
         Size = 1U << power;
-        Mask = ~(ulong.MaxValue << power);
+        Mask = Size - 1;
     }
 
     public static BlockSize FromPowerOfTwo(byte power)
