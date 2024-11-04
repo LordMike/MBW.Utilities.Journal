@@ -1,44 +1,36 @@
 ﻿using MBW.Utilities.Journal.Exceptions;
-using MBW.Utilities.Journal.Structures;
 using MBW.Utilities.Journal.Tests.Helpers;
 
 namespace MBW.Utilities.Journal.Tests;
 
-public class TransactTests : TestsBase
+public class GenericTests : TestsBase
 {
-    /// <summary>
-    /// Prepare a file &amp; journal, committed - but not applied
-    /// </summary>
-    private void PrepareCommittedJournalButNotApplied(string initial = "Initial", string transacted = "HeldBack")
+    public delegate JournaledStream CreateDelegate(Stream origin, IJournalStreamFactory journalStreamFactory);
+
+    public static IEnumerable<object[]> GetTestStreams()
     {
-        char[] expectedTransacted = new char[Math.Max(initial.Length, transacted.Length)];
-        initial.CopyTo(expectedTransacted);
-        transacted.CopyTo(expectedTransacted);
-
-        TestFile.WriteStr(initial);
-
-        RunScenario<TestStreamBlockedException>(() =>
-        {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
-
-            journaledStream.WriteStr(transacted);
-            Assert.Equal(expectedTransacted, journaledStream.ReadFullStr().AsSpan());
-
-            // Trigger an unwriteable file
-            TestFile.LockWrites = true;
-
-            journaledStream.Commit();
-        });
+        yield return [(CreateDelegate)JournaledStreamFactory.CreateWalJournal];
+        yield return [(CreateDelegate)JournaledStreamFactory.CreateSparseJournal];
     }
 
-    [Fact]
-    public void RollbackAfterCommitTest()
+    private void ApplyToAllJournals(Action<string, Stream> action)
+    {
+        foreach ((string? identifier, var journalStream) in JournalFileProvider.Streams)
+        {
+            journalStream.Seek(0, SeekOrigin.Begin);
+            action(identifier, journalStream);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void RollbackAfterCommitTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("Initial");
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
 
@@ -57,14 +49,15 @@ public class TransactTests : TestsBase
         Assert.Equal("InitialCommittedData", TestFile.ReadFullStr());
     }
 
-    [Fact]
-    public void EmptyTransactionCommitTest()
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void EmptyTransactionCommitTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("InitialData");
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             // Commit without writing
             journaledStream.Commit();
@@ -72,17 +65,18 @@ public class TransactTests : TestsBase
 
         // Ensure no changes are made to the file
         Assert.Equal("InitialData", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.HasAnyJournal);
     }
 
-    [Fact]
-    public void BoundaryConditionWritesTest()
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void BoundaryConditionWritesTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("Data");
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             // Position at the end of the current data
             journaledStream.Seek(0, SeekOrigin.End);
@@ -104,12 +98,13 @@ public class TransactTests : TestsBase
         Assert.Equal("DataEnd\0\0\0Beyond", TestFile.ReadFullStr());
     }
 
-    [Fact]
-    public void NonSequentialWritesTest()
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void NonSequentialWritesTest(CreateDelegate createDelegate)
     {
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             // Write data at the start
             journaledStream.WriteStr("0123456789");
@@ -151,14 +146,15 @@ public class TransactTests : TestsBase
         Assert.Equal("9876588774466", TestFile.ReadFullStr());
     }
 
-    [Fact]
-    public void EOFBehaviorTest()
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void EOFBehaviorTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("12345");
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             // Attempt to read at EOF
             journaledStream.Seek(0, SeekOrigin.End); // Move to the end of the data
@@ -184,100 +180,111 @@ public class TransactTests : TestsBase
         Assert.Equal("123456789\0\0\0\0\0\0End", TestFile.ReadFullStr());
     }
 
-    [Fact]
-    public void JournalFileCorruptionTest_PartialCorrupt()
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void JournalFileCorruptionTest_FullyCorrupt(CreateDelegate createDelegate)
     {
-        PrepareCommittedJournalButNotApplied("Clean", "Corrupt");
+        char[] expectedTransacted = new char[Math.Max("Clean".Length, "Corrupt".Length)];
+        "Clean".CopyTo(expectedTransacted);
+        "Corrupt".CopyTo(expectedTransacted);
 
-        Assert.True(JournalFileProvider.Exists());
-        Assert.Equal("Clean", TestFile.ReadFullStr());
+        TestFile.WriteStr("Clean");
 
-        // Corrupt journal between header & footer
-        byte[] buffer = new byte[JournalFile.Length - TransactFileHeader.StructSize - TransactFileFooter.StructSize];
-        Random rng = new Random(42);
-        rng.NextBytes(buffer);
-
-        JournalFile.Seek(TransactFileHeader.StructSize, SeekOrigin.Begin);
-        JournalFile.Write(buffer);
-
-        // Verify the journal is detected as not being valid (corrupt data)
-        JournalCorruptedException ex = RunScenario<JournalCorruptedException>(() =>
+        RunScenario<TestStreamBlockedException>(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream1 = createDelegate(TestFile, JournalFileProvider);
+
+            journaledStream1.WriteStr("Corrupt");
+            Assert.Equal(expectedTransacted, journaledStream1.ReadFullStr().AsSpan());
+
+            // Trigger an unwriteable file
+            TestFile.LockWrites = true;
+
+            journaledStream1.Commit();
         });
 
-        Assert.True(ex.OriginalFileHasBeenAltered);
-
-        // Note: Original has been altered, as the length is applied before any journaled data is read
-        // // Verify that the original data is still intact
-        // Assert.Equal("Clean", TestFile.ReadFullStr());
-    }
-
-    [Fact]
-    public void JournalFileCorruptionTest_FullyCorrupt()
-    {
-        PrepareCommittedJournalButNotApplied("Clean", "Corrupt");
-
-        Assert.True(JournalFileProvider.Exists());
+        Assert.True(JournalFileProvider.Exists(string.Empty));
         Assert.Equal("Clean", TestFile.ReadFullStr());
 
         // Corrupt journal entirely
-        byte[] buffer = new byte[JournalFile.Length];
-        Random rng = new Random(42);
-        rng.NextBytes(buffer);
+        ApplyToAllJournals(static (identifier, journalStream) =>
+        {
+            byte[] buffer = new byte[journalStream.Length];
+            Random rng = new Random(42);
+            rng.NextBytes(buffer);
 
-        JournalFile.Write(buffer);
+            journalStream.Write(buffer);
+        });
 
         // Verify the journal is detected as not being valid (missing header)
         RunScenario<JournalCorruptedException>(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
         });
 
         // The journal must not be removed. The user must figure out what to do
         RunScenario<JournalCorruptedException>(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
         });
 
         // Verify that the original data is still intact
         Assert.Equal("Clean", TestFile.ReadFullStr());
     }
 
-    [Fact]
-    public void RecoverCommitedTest()
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void RecoverCommitedTest(CreateDelegate createDelegate)
     {
-        PrepareCommittedJournalButNotApplied();
+        char[] expectedTransacted = new char[Math.Max("Initial".Length, "HeldBack".Length)];
+        "Initial".CopyTo(expectedTransacted);
+        "HeldBack".CopyTo(expectedTransacted);
+
+        TestFile.WriteStr("Initial");
+
+        RunScenario<TestStreamBlockedException>(() =>
+        {
+            using JournaledStream journaledStream1 = createDelegate(TestFile, JournalFileProvider);
+
+            journaledStream1.WriteStr("HeldBack");
+            Assert.Equal(expectedTransacted, journaledStream1.ReadFullStr().AsSpan());
+
+            // Trigger an unwriteable file
+            TestFile.LockWrites = true;
+
+            journaledStream1.Commit();
+        });
 
         // File does not see "HeldBack"
-        Assert.True(JournalFileProvider.Exists());
+        Assert.True(JournalFileProvider.Exists(string.Empty));
         Assert.Equal("Initial", TestFile.ReadFullStr());
 
         // We should commit the journal at this point
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             // Original & transacted file should see "HeldBack"
             // The journal should have been replayed
             Assert.Equal("HeldBack", TestFile.ReadFullStr());
             Assert.Equal("HeldBack", journaledStream.ReadFullStr());
-            Assert.False(JournalFileProvider.Exists());
+            Assert.False(JournalFileProvider.HasAnyJournal);
         });
 
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.HasAnyJournal);
         Assert.Equal("HeldBack", TestFile.ReadFullStr());
     }
 
-    [Fact]
-    public void RecoverUncommitedTest()
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void RecoverUncommitedTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("Initially");
 
         // A journal is made, but is not committed
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.WriteStr("NotSeen");
 
@@ -289,29 +296,30 @@ public class TransactTests : TestsBase
 
         // Original file still holds "Initially"
         Assert.Equal("Initially", TestFile.ReadFullStr());
-        Assert.True(JournalFileProvider.Exists());
+        Assert.True(JournalFileProvider.HasAnyJournal);
 
         // Once reopened, the journal should be discarded
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             Assert.Equal("Initially", journaledStream.ReadFullStr());
-            Assert.False(JournalFileProvider.Exists());
+            Assert.False(JournalFileProvider.HasAnyJournal);
         });
 
         Assert.Equal("Initially", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.HasAnyJournal);
     }
 
-    [Fact]
-    public void RollebackTest()
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void RollbackTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("Alpha");
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
 
@@ -319,61 +327,62 @@ public class TransactTests : TestsBase
             journaledStream.WriteStr("Beta");
 
             Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
-            Assert.True(JournalFileProvider.Exists());
+            Assert.True(JournalFileProvider.HasAnyJournal);
 
             journaledStream.Rollback();
 
             // Post-rollback
-            Assert.False(JournalFileProvider.Exists());
             Assert.Equal("Alpha", journaledStream.ReadFullStr());
+            Assert.False(JournalFileProvider.HasAnyJournal);
         });
 
-        Assert.False(JournalFileProvider.Exists());
         Assert.Equal("Alpha", TestFile.ReadFullStr());
+        Assert.False(JournalFileProvider.HasAnyJournal);
     }
 
-    [Fact]
-    public void DoubleCommitTest()
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void DoubleCommitTest(CreateDelegate createDelegate)
     {
         RunScenario(() =>
         {
-            using (JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider))
-            {
-                // Initial commit
-                journaledStream.WriteStr("Alpha");
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
-                Assert.Equal("Alpha", journaledStream.ReadFullStr());
-                Assert.True(JournalFileProvider.Exists());
+            // Initial commit
+            journaledStream.WriteStr("Alpha");
 
-                journaledStream.Commit();
+            Assert.Equal("Alpha", journaledStream.ReadFullStr());
+            Assert.True(JournalFileProvider.HasAnyJournal);
 
-                // Post-commit
-                Assert.False(JournalFileProvider.Exists());
-                Assert.Equal("Alpha", journaledStream.ReadFullStr());
+            journaledStream.Commit();
 
-                // Second commit
-                journaledStream.WriteStr("Beta");
-                Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
-                Assert.True(JournalFileProvider.Exists());
+            // Post-commit
+            Assert.Equal("Alpha", journaledStream.ReadFullStr());
+            Assert.False(JournalFileProvider.HasAnyJournal);
 
-                journaledStream.Commit();
+            // Second commit
+            journaledStream.WriteStr("Beta");
+            Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
+            Assert.True(JournalFileProvider.HasAnyJournal);
 
-                // Post-commit
-                Assert.False(JournalFileProvider.Exists());
-                Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
-            }
+            journaledStream.Commit();
+
+            // Post-commit
+            Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
+            Assert.False(JournalFileProvider.HasAnyJournal);
         });
 
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.HasAnyJournal);
         Assert.Equal("AlphaBeta", TestFile.ReadFullStr());
     }
 
-    [Fact]
-    public void SimpleTest()
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void SimpleTest(CreateDelegate createDelegate)
     {
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.WriteStr("Begin");
             Assert.Equal(5, journaledStream.Length);
@@ -391,11 +400,11 @@ public class TransactTests : TestsBase
         });
 
         Assert.Equal("BeginMidEnd", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.HasAnyJournal);
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(3, SeekOrigin.Begin);
             journaledStream.WriteStr("u");
@@ -405,11 +414,11 @@ public class TransactTests : TestsBase
         });
 
         Assert.Equal("BegunMidEnd", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.HasAnyJournal);
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
             journaledStream.WriteStr("PostStuff");
@@ -425,11 +434,11 @@ public class TransactTests : TestsBase
         });
 
         Assert.Equal("BeganMidEndPostStuff", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.HasAnyJournal);
 
         RunScenario(() =>
         {
-            using JournaledStream journaledStream = new JournaledStream(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.SetLength(8);
 
@@ -439,6 +448,6 @@ public class TransactTests : TestsBase
         });
 
         Assert.Equal("BeganMid", TestFile.ReadFullStr());
-        Assert.False(JournalFileProvider.Exists());
+        Assert.False(JournalFileProvider.HasAnyJournal);
     }
 }

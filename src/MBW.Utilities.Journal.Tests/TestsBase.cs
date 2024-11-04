@@ -5,23 +5,24 @@ namespace MBW.Utilities.Journal.Tests;
 public abstract class TestsBase
 {
     protected TestStream TestFile { get; }
-    protected TestStream JournalFile { get; }
     protected MemoryJournal JournalFileProvider { get; }
 
     protected TestsBase()
     {
         TestFile = new TestStream();
-        JournalFile = new TestStream();
-        JournalFileProvider = new MemoryJournal(JournalFile);
+        JournalFileProvider = new MemoryJournal();
     }
 
     private void ResetFileOffsets()
     {
         TestFile.Seek(0, SeekOrigin.Begin);
-        JournalFile.Seek(0, SeekOrigin.Begin);
-
         TestFile.Lock = false;
-        JournalFile.Lock = false;
+
+        foreach ((string? _, var testStream) in JournalFileProvider.Streams)
+        {
+            testStream.Seek(0, SeekOrigin.Begin);
+            testStream.Lock = false;
+        }
     }
 
     protected void RunScenario(Action @delegate)

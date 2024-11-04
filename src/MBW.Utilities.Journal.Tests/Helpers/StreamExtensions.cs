@@ -21,4 +21,14 @@ internal static class StreamExtensions
         stream.Position = pos;
         return res;
     }
+
+    public static byte[] ReadFullBytes(this Stream stream)
+    {
+        long pos = stream.Position;
+        stream.Seek(0, SeekOrigin.Begin);
+        byte[] buffer = new byte[stream.Length];
+        stream.ReadExactly(buffer);
+        stream.Position = pos;
+        return buffer;
+    }
 }

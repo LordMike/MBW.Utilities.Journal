@@ -28,9 +28,20 @@ internal static class StreamExtensions
         return ref MemoryMarshal.AsRef<T>(buffer);
     }
 
-    public static void WriteOne<T>(this Stream stream, T value, Span<byte> buffer) where T : unmanaged
+    public static int ReadUpTo(this Stream source, Span<byte> buffer)
     {
-        MemoryMarshal.Write(buffer, ref value);
-        stream.Write(buffer);
+        int totalRead = 0;
+        while (buffer.Length > 0)
+        {
+            var read = source.Read(buffer);
+            totalRead += read;
+
+            if (read <= 0)
+                return totalRead;
+
+            buffer = buffer.Slice(read);
+        }
+
+        return totalRead;
     }
 }
