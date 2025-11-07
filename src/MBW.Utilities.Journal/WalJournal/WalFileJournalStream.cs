@@ -159,7 +159,12 @@ internal sealed class WalFileJournalStream : JournaledStream
         // Calculate the number of bytes read
         // This will be from the offset we had, until the length of the stream or count of bytes wanted, whatever comes first
         long availableBytes = VirtualLength - thisRead.Start;
-        return (int)Math.Min(availableBytes, thisRead.Length);
+        if (availableBytes <= 0)
+            return 0;
+
+        int result = (int)Math.Min(availableBytes, thisRead.Length);
+        VirtualOffset += result;
+        return result;
     }
 
     public override void Write(ReadOnlySpan<byte> buffer)

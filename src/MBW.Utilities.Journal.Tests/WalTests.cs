@@ -8,6 +8,38 @@ namespace MBW.Utilities.Journal.Tests;
 public class WalTests : TestsBase
 {
     [Fact]
+    public void ReadAdvancesPositionWhenJournalHasUncommittedData()
+    {
+        RunScenario(() =>
+        {
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
+
+            const string data = "ABCDEF";
+            journaledStream.WriteStr(data);
+            Assert.Equal(data.Length, journaledStream.Length);
+            journaledStream.Seek(0, SeekOrigin.Begin);
+            Assert.Equal(0, journaledStream.Position);
+
+            Span<byte> buffer = stackalloc byte[2];
+            int read = journaledStream.Read(buffer);
+
+            Assert.Equal(2, read);
+            Assert.Equal(2, journaledStream.Position);
+        });
+    }
+
+    [Fact]
+    public void PositionSetterRejectsNegativeValues()
+    {
+        RunScenario(() =>
+        {
+            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => journaledStream.Position = -1);
+        });
+    }
+
+    [Fact]
     public void JournalFileCorruptionTest_PartialCorrupt()
     {
         char[] expectedTransacted = new char[Math.Max("Clean".Length, "Corrupt".Length)];

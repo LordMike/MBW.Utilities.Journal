@@ -80,6 +80,13 @@ public abstract class JournaledStream : Stream
     public override long Position
     {
         get => VirtualOffset;
-        set => VirtualOffset = value;
+        set
+        {
+            if (value < 0)
+                throw new ArgumentOutOfRangeException(nameof(value), "Position must be non-negative");
+
+            VirtualOffset = value;
+            VirtualLength = Math.Max(VirtualLength, VirtualOffset);
+        }
     }
 }
