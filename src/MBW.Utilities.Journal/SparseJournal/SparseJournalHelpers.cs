@@ -20,7 +20,8 @@ internal static class SparseJournalHelpers
             throw new JournalCorruptedException("Journal header was corrupted", false);
 
         journal.Seek(-SparseJournalFooter.StructSize, SeekOrigin.End);
-        if (!JournaledStreamHelpers.TryRead(journal, SparseJournalFileConstants.SparseJournalFooterMagic, out SparseJournalFooter footer))
+        if (!JournaledStreamHelpers.TryRead(journal, SparseJournalFileConstants.SparseJournalFooterMagic,
+                out SparseJournalFooter footer))
         {
             // Bad file or not committed
             throw new InvalidOperationException();
@@ -29,12 +30,14 @@ internal static class SparseJournalHelpers
         if (footer.Magic != SparseJournalFileConstants.SparseJournalFooterMagic)
             throw new JournalCorruptedException("Journal footer was corrupted", false);
         if (header.Nonce != footer.HeaderNonce)
-            throw new InvalidOperationException($"Header & footer does not match. Nonces: {header.Nonce:X8}, footer: {footer.HeaderNonce:X8}");
+            throw new InvalidOperationException(
+                $"Header & footer does not match. Nonces: {header.Nonce:X8}, footer: {footer.HeaderNonce:X8}");
 
         ApplyJournal(origin, journal, header, footer);
     }
 
-    internal static void ApplyJournal(Stream origin, Stream journal, JournalFileHeader header, SparseJournalFooter footer)
+    internal static void ApplyJournal(Stream origin, Stream journal, JournalFileHeader header,
+        SparseJournalFooter footer)
     {
         var blockSize = BlockSize.FromPowerOfTwo(footer.BlockSize);
 
@@ -42,7 +45,7 @@ internal static class SparseJournalHelpers
         journal.Seek((long)footer.StartOfBitmap, SeekOrigin.Begin);
 
         ulong[] bitmap = new ulong[footer.BitmapLengthUlongs];
-        var bitmapBytes = MemoryMarshal.AsBytes<ulong>(bitmap);
+        Span<byte> bitmapBytes = MemoryMarshal.AsBytes<ulong>(bitmap);
         journal.ReadExactly(bitmapBytes);
 
         // Seek to begin of data
@@ -86,7 +89,8 @@ internal static class SparseJournalHelpers
 
         // Calculate the number of blocks to copy over. Note that we only have as many bitmap bits as there were blocks written from the start of the stream
         // So it may be that the files length does not correspond to the number of bits in the bitmap.
-        long blocksCount = Math.Min(blockSize.GetBlockCountRoundUp((ulong)footer.FinalLength), bitmap.Length * 8 * sizeof(ulong));
+        long blocksCount = Math.Min(blockSize.GetBlockCountRoundUp((ulong)footer.FinalLength),
+            bitmap.Length * 8 * sizeof(ulong));
 
         // Apply sparse to the original
         long? lastBlockWithData = null;
@@ -119,7 +123,7 @@ internal static class SparseJournalHelpers
             long blocksToCopy = blocksCount - lastBlockWithData.Value;
             CopyStreams(lastBlockWithData.Value, blocksToCopy);
         }
-        
+
         origin.Flush();
     }
 }

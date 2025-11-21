@@ -18,6 +18,7 @@ internal sealed class WalFileJournalStream : JournaledStream
 
     private uint _journalWrittenSegments;
     private ushort _journalMaxSegmentDataLength;
+    private bool _journalFinalized;
 
     public WalFileJournalStream(Stream origin, IJournalStreamFactory journalStreamFactory) : base(origin, journalStreamFactory)
     {
@@ -55,7 +56,7 @@ internal sealed class WalFileJournalStream : JournaledStream
         return true;
     }
 
-    public override void Commit()
+    public override void Commit(bool applyImmediately = true)
     {
         if (!IsJournalOpened(false))
         {
@@ -63,24 +64,12 @@ internal sealed class WalFileJournalStream : JournaledStream
             return;
         }
 
-        // Close out journal stream
-        _journal.Seek(0, SeekOrigin.End);
-        WalJournalFooter value = new WalJournalFooter
-        {
-            Magic = WalJournalFileConstants.WalJournalFooterMagic,
-            HeaderNonce = _journalNonceValue,
-            Entries = _journalWrittenSegments,
-            FinalLength = VirtualLength,
-            MaxEntryDataLength = _journalMaxSegmentDataLength
-        };
-        _journal.Write(value.AsSpan());
-        _journal.Flush();
+        EnsureJournalFinalized();
 
-        _journal.Seek(0, SeekOrigin.Begin);
-        WalFileJournalHelpers.ApplyJournal(Origin, _journal);
+        if (!applyImmediately)
+            return;
 
-        // The journal has been applied
-        DeleteAndResetJournal();
+        ApplyAndResetJournal();
     }
 
     public override void Rollback()
@@ -106,8 +95,39 @@ internal sealed class WalFileJournalStream : JournaledStream
         _journalSegments = null;
         _journalWrittenSegments = 0;
         _journalMaxSegmentDataLength = 0;
+        _journalFinalized = false;
 
         JournalStreamFactory.Delete(string.Empty);
+    }
+
+    private void EnsureJournalFinalized()
+    {
+        if (_journalFinalized)
+            return;
+
+        Stream journal = _journal ?? throw new InvalidOperationException("Unable to finalize journal because it is not open");
+        journal.Seek(0, SeekOrigin.End);
+        WalJournalFooter value = new WalJournalFooter
+        {
+            Magic = WalJournalFileConstants.WalJournalFooterMagic,
+            HeaderNonce = _journalNonceValue,
+            Entries = _journalWrittenSegments,
+            FinalLength = VirtualLength,
+            MaxEntryDataLength = _journalMaxSegmentDataLength
+        };
+        journal.Write(value.AsSpan());
+        journal.Flush();
+
+        _journalFinalized = true;
+    }
+
+    private void ApplyAndResetJournal()
+    {
+        Stream journal = _journal ?? throw new InvalidOperationException("Unable to apply journal because it is not open");
+        journal.Seek(0, SeekOrigin.Begin);
+        WalFileJournalHelpers.ApplyJournal(Origin, journal);
+
+        DeleteAndResetJournal();
     }
 
     public override void Flush()

@@ -23,7 +23,7 @@ public abstract class JournaledStream : Stream
         VirtualOffset = 0;
     }
 
-    public abstract void Commit();
+    public abstract void Commit(bool applyImmediately = true);
     public abstract void Rollback();
 
     public abstract override int Read(Span<byte> buffer);

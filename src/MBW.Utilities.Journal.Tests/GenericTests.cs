@@ -242,17 +242,15 @@ public class GenericTests : TestsBase
 
         TestFile.WriteStr("Initial");
 
-        RunScenario<TestStreamBlockedException>(() =>
+        RunScenario(() =>
         {
             using JournaledStream journaledStream1 = createDelegate(TestFile, JournalFileProvider);
 
             journaledStream1.WriteStr("HeldBack");
             Assert.Equal(expectedTransacted, journaledStream1.ReadFullStr().AsSpan());
 
-            // Trigger an unwriteable file
-            TestFile.LockWrites = true;
-
-            journaledStream1.Commit();
+            // Commit, but do not apply yet
+            journaledStream1.Commit(false);
         });
 
         // File does not see "HeldBack"
@@ -262,6 +260,7 @@ public class GenericTests : TestsBase
         // We should commit the journal at this point
         RunScenario(() =>
         {
+            // This should auto-apply the committed stream
             using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
 
             // Original & transacted file should see "HeldBack"
@@ -374,6 +373,33 @@ public class GenericTests : TestsBase
 
         Assert.False(JournalFileProvider.HasAnyJournal);
         Assert.Equal("AlphaBeta", TestFile.ReadFullStr());
+    }
+
+    [Theory]
+    [MemberData(nameof(GetTestStreams))]
+    public void DeferredCommitApplyTest(CreateDelegate createDelegate)
+    {
+        TestFile.WriteStr("Original");
+
+        RunScenario(() =>
+        {
+            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+
+            journaledStream.Seek(0, SeekOrigin.End);
+            journaledStream.WriteStr("Delayed");
+
+            Assert.Equal("OriginalDelayed", journaledStream.ReadFullStr());
+
+            journaledStream.Commit(applyImmediately: false);
+
+            Assert.Equal("Original", TestFile.ReadFullStr());
+            Assert.True(JournalFileProvider.HasAnyJournal);
+
+            journaledStream.Commit();
+        });
+
+        Assert.False(JournalFileProvider.HasAnyJournal);
+        Assert.Equal("OriginalDelayed", TestFile.ReadFullStr());
     }
 
     [Theory]
