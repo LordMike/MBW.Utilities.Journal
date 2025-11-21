@@ -44,8 +44,8 @@ internal static class SparseJournalHelpers
         // Read bitmap
         journal.Seek((long)footer.StartOfBitmap, SeekOrigin.Begin);
 
-        ulong[] bitmap = new ulong[footer.BitmapLengthUlongs];
-        Span<byte> bitmapBytes = MemoryMarshal.AsBytes<ulong>(bitmap);
+        Span<ulong> bitmap = new ulong[footer.BitmapLengthUlongs];
+        Span<byte> bitmapBytes = MemoryMarshal.AsBytes(bitmap);
         journal.ReadExactly(bitmapBytes);
 
         // Seek to begin of data

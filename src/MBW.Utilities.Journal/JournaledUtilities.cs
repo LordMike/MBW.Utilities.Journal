@@ -17,7 +17,8 @@ public static class JournaledUtilities
     }
 
     /// <summary>
-    /// If a journal exists for this stream, and it was committed but not yet applied, this function will apply it. If the journal exists, but wasn't committed, it is discarded.
+    /// If a journal exists for this stream, and it was committed but not yet applied, this function will apply it.
+    /// If the journal exists, but wasn't committed, it is discarded.
     /// </summary>
     public static void EnsureJournalCommitted(Stream origin, IJournalStreamFactory journalStreamFactory)
     {

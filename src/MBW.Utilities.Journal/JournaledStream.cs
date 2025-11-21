@@ -1,3 +1,4 @@
+using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Helpers;
 
 namespace MBW.Utilities.Journal;
@@ -9,6 +10,7 @@ public abstract class JournaledStream : Stream
 
     protected long VirtualOffset;
     protected long VirtualLength;
+    private bool _journalFinalized;
 
     protected JournaledStream(Stream origin, IJournalStreamFactory journalStreamFactory)
     {
@@ -23,26 +25,54 @@ public abstract class JournaledStream : Stream
         VirtualOffset = 0;
     }
 
-    public abstract void Commit(bool applyImmediately = true);
-    public abstract void Rollback();
+    public void Commit(bool applyImmediately = true)
+    {
+        if (!IsJournalOpened(false))
+            return;
+
+        EnsureJournalFinalized();
+
+        if (!applyImmediately)
+            return;
+
+        ApplyFinalizedJournal();
+        ClearFinalizationState();
+    }
+
+    public void Rollback()
+    {
+        RollbackJournal();
+
+        Position = Math.Clamp(VirtualOffset, 0, Origin.Length);
+        VirtualLength = Origin.Length;
+
+        ClearFinalizationState();
+    }
 
     public abstract override int Read(Span<byte> buffer);
     public abstract override void Write(ReadOnlySpan<byte> buffer);
-    
+
     /// <summary>
     /// Note: Sealed to force overriding the Span&lt;&gt; overloads instead
     /// </summary>
     public sealed override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan().Slice(offset, count));
-    
+
     /// <summary>
     /// Note: Sealed to force overriding the Span&lt;&gt; overloads instead
     /// </summary>
-    public sealed override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan().Slice(offset, count));
+    public sealed override void Write(byte[] buffer, int offset, int count)
+    {
+        EnsureNotFinalized();
+        
+        Write(buffer.AsSpan().Slice(offset, count));
+    }
 
     protected abstract bool IsJournalOpened(bool openIfClosed);
 
     public override void SetLength(long value)
     {
+        EnsureNotFinalized();
+
         if (VirtualLength == value)
             return;
 
@@ -50,7 +80,7 @@ public abstract class JournaledStream : Stream
             throw new InvalidOperationException("Unable to open a journal for writing");
 
         VirtualLength = value;
-        VirtualOffset = Math.Min(VirtualLength, VirtualOffset);
+        VirtualOffset = Math.Clamp(VirtualOffset, 0, VirtualLength);
     }
 
     public override long Seek(long offset, SeekOrigin origin)
@@ -64,11 +94,10 @@ public abstract class JournaledStream : Stream
         };
 
         if (newOffset < 0)
-            throw new ArgumentException($"Desired offset, {offset} from {origin} placed the offset at {newOffset} which was out of range");
+            throw new ArgumentException(
+                $"Desired offset, {offset} from {origin} placed the offset at {newOffset} which was out of range");
 
-        VirtualOffset = newOffset;
-        VirtualLength = Math.Max(VirtualLength, VirtualOffset);
-        return VirtualOffset;
+        return Position = newOffset;
     }
 
     public override bool CanRead => Origin.CanRead;
@@ -85,8 +114,33 @@ public abstract class JournaledStream : Stream
             if (value < 0)
                 throw new ArgumentOutOfRangeException(nameof(value), "Position must be non-negative");
 
+            if (value > VirtualLength)
+                EnsureNotFinalized();
+            
             VirtualOffset = value;
             VirtualLength = Math.Max(VirtualLength, VirtualOffset);
         }
     }
+
+    private void ClearFinalizationState() => _journalFinalized = false;
+
+    protected void EnsureNotFinalized()
+    {
+        if (_journalFinalized)
+            throw new JournalCommittedButNotAppliedException(
+                "The journal has been prepared for commit and cannot be modified until it is applied or discarded");
+    }
+
+    private void EnsureJournalFinalized()
+    {
+        if (_journalFinalized)
+            return;
+
+        FinalizeJournal();
+        _journalFinalized = true;
+    }
+
+    protected abstract void FinalizeJournal();
+    protected abstract void ApplyFinalizedJournal();
+    protected abstract void RollbackJournal();
 }

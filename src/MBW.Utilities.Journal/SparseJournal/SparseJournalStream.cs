@@ -14,7 +14,6 @@ internal sealed class SparseJournalStream : JournaledStream
 
     private readonly BlockSize _blockSize;
     private readonly ulong _journalNonceValue;
-    private bool _journalFinalized;
 
     public SparseJournalStream(Stream origin, IJournalStreamFactory journalStreamFactory, byte blockSize = 12) : base(origin, journalStreamFactory)
     {
@@ -60,32 +59,6 @@ internal sealed class SparseJournalStream : JournaledStream
         return true;
     }
 
-    public override void Commit(bool applyImmediately = true)
-    {
-        if (!IsJournalOpened(false))
-        {
-            // No writes have happened
-            return;
-        }
-
-
-        EnsureJournalFinalized();
-
-        if (!applyImmediately)
-            return;
-
-        ApplyAndResetJournal();
-    }
-
-    public override void Rollback()
-    {
-        DeleteAndResetJournal();
-
-        // Reset stream back to what it was initially
-        VirtualLength = Origin.Length;
-        VirtualOffset = Math.Clamp(VirtualOffset, 0, VirtualLength);
-    }
-
     private void DeleteAndResetJournal()
     {
         if (!IsJournalOpened(false))
@@ -98,23 +71,19 @@ internal sealed class SparseJournalStream : JournaledStream
         _sparseJournal.Close();
         _sparseJournal = null;
         _sparseBitmap = null;
-        _journalFinalized = false;
 
         JournalStreamFactory.Delete(string.Empty);
     }
 
-    private void EnsureJournalFinalized()
+    protected override void FinalizeJournal()
     {
-        if (_journalFinalized)
-            return;
+        if (!IsJournalOpened(false))
+            throw new InvalidOperationException("Cannot FinalizeJournal, because its not opened");
 
-        Stream journal = _sparseJournal ?? throw new InvalidOperationException("Unable to finalize sparse journal because it is not open");
-        List<ulong> bitmap = _sparseBitmap ?? throw new InvalidOperationException("Unable to finalize sparse journal because the bitmap is missing");
+        _sparseJournal.Seek(0, SeekOrigin.End);
+        ulong startOfBitmap = (ulong)_sparseJournal.Length;
 
-        journal.Seek(0, SeekOrigin.End);
-        ulong startOfBitmap = (ulong)journal.Length;
-
-        journal.Write(GetBitmapBytes(bitmap));
+        _sparseJournal.Write(GetBitmapBytes(_sparseBitmap));
 
         SparseJournalFooter value = new SparseJournalFooter
         {
@@ -122,24 +91,26 @@ internal sealed class SparseJournalStream : JournaledStream
             HeaderNonce = _journalNonceValue,
             FinalLength = VirtualLength,
             BlockSize = _blockSize.Power,
-            BitmapLengthUlongs = (uint)bitmap.Count,
+            BitmapLengthUlongs = (uint)_sparseBitmap.Count,
             StartOfBitmap = startOfBitmap,
         };
 
-        journal.Write(value.AsSpan());
-        journal.Flush();
-
-        _journalFinalized = true;
+        _sparseJournal.Write(value.AsSpan());
+        _sparseJournal.Flush();
     }
 
-    private void ApplyAndResetJournal()
+    protected override void ApplyFinalizedJournal()
     {
-        Stream journal = _sparseJournal ?? throw new InvalidOperationException("Unable to apply sparse journal because it is not open");
-        journal.Seek(0, SeekOrigin.Begin);
-        SparseJournalHelpers.ApplyJournal(Origin, journal);
+        if (!IsJournalOpened(false))
+            throw new InvalidOperationException("Cannot ApplyFinalizedJournal, because its not opened");
+
+        _sparseJournal.Seek(0, SeekOrigin.Begin);
+        SparseJournalHelpers.ApplyJournal(Origin, _sparseJournal);
 
         DeleteAndResetJournal();
     }
+
+    protected override void RollbackJournal() => DeleteAndResetJournal();
 
     public override void Flush()
     {
@@ -189,6 +160,8 @@ internal sealed class SparseJournalStream : JournaledStream
     {
         if (buffer.Length == 0)
             return;
+
+        EnsureNotFinalized();
 
         // Prepare buffer in multiple of blockSize bytes
         // The alignedSize must be large enough to cover both ends of an unaligned write

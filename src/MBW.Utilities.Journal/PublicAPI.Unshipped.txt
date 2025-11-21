@@ -1,6 +1,6 @@
 #nullable enable
-abstract MBW.Utilities.Journal.JournaledStream.Commit(bool applyImmediately = true) -> void
-abstract MBW.Utilities.Journal.JournaledStream.Rollback() -> void
+MBW.Utilities.Journal.JournaledStream.Commit(bool applyImmediately = true) -> void
+MBW.Utilities.Journal.JournaledStream.Rollback() -> void
 MBW.Utilities.Journal.Exceptions.JournalCorruptedException
 MBW.Utilities.Journal.Exceptions.JournalCorruptedException.JournalCorruptedException(string! message, bool originalFileHasBeenAltered) -> void
 MBW.Utilities.Journal.Exceptions.JournalCorruptedException.OriginalFileHasBeenAltered.get -> bool

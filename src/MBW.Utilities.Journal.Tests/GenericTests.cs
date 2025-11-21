@@ -392,6 +392,8 @@ public class GenericTests : TestsBase
 
             journaledStream.Commit(applyImmediately: false);
 
+            Assert.Throws<JournalCommittedButNotAppliedException>(() => journaledStream.WriteStr("Again"));
+
             Assert.Equal("Original", TestFile.ReadFullStr());
             Assert.True(JournalFileProvider.HasAnyJournal);
 
