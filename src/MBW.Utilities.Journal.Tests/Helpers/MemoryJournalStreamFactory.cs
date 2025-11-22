@@ -1,6 +1,8 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace MBW.Utilities.Journal.Tests.Helpers;
 
-public sealed class MemoryJournal : IJournalStreamFactory
+public sealed class MemoryJournalStreamFactory : IJournalStreamFactory
 {
     private readonly Dictionary<string, TestStream> _streams = new(StringComparer.Ordinal);
 
@@ -16,16 +18,24 @@ public sealed class MemoryJournal : IJournalStreamFactory
             removed.Lock = true;
     }
 
-    public Stream OpenOrCreate(string identifier)
+    public bool TryOpen(string identifier, bool createIfMissing, [NotNullWhen(true)] out Stream? stream)
     {
-        if (_streams.TryGetValue(identifier, out var stream))
+        if (_streams.TryGetValue(identifier, out var tmpStream))
         {
+            stream = tmpStream;
             stream.Seek(0, SeekOrigin.Begin);
-            return stream;
+            return true;
         }
 
-        stream = new TestStream();
-        _streams.Add(identifier, stream);
-        return stream;
+        if (!createIfMissing)
+        {
+            stream = null;
+            return false;
+        }
+
+        tmpStream = new TestStream();
+        _streams.Add(identifier, tmpStream);
+        stream = tmpStream;
+        return true;
     }
 }

@@ -5,55 +5,6 @@ using Metalama.Patterns.Contracts;
 
 namespace MBW.Utilities.Journal;
 
-public enum JournaledStreamState
-{
-    Unset,
-
-    /// <summary>
-    /// Open, ready for read/write
-    /// </summary>
-    Clean,
-
-    /// <summary>
-    /// Open, ready for read/write, has changes
-    /// </summary>
-    JournalOpened,
-
-    /// <summary>
-    /// Committed, but not yet applied. Can only read
-    /// </summary>
-    JournalFinalized,
-
-    /// <summary>
-    /// The stream is closed, no further action is possible
-    /// </summary>
-    Closed
-}
-
-public interface IJournalFactory
-{
-    IJournal Create(Stream origin, Stream journal);
-    IJournal Open(Stream origin, Stream journal);
-}
-
-public interface IJournal : IDisposable
-{
-    ValueTask FinalizeJournal();
-    ValueTask ApplyJournal();
-    ValueTask RollbackJournal();
-
-    void Seek(long position);
-
-    void Flush();
-
-    int Read(Span<byte> buffer);
-    ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken);
-    void Write(ReadOnlySpan<byte> buffer);
-    ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken);
-
-    void Dispose();
-}
-
 public sealed class JournaledStreamContracts : Stream
 {
     private JournaledStreamState _state;

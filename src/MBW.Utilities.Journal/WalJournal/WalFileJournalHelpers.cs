@@ -6,6 +6,86 @@ using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.WalJournal;
 
+internal sealed class WalJournalFactory : IJournalFactory
+{
+    public IJournal Create(Stream origin, Stream journal)
+    {
+        return new WalJournal(origin, journal);
+    }
+
+    public IJournal Open(Stream origin, Stream journal)
+    {
+        return new WalJournal(origin, journal);
+    }
+}
+
+internal sealed class WalJournal : IJournal
+{
+    private readonly Stream _origin;
+    private readonly Stream _journal;
+
+    public WalJournal(Stream origin, Stream journal)
+    {
+        _origin = origin;
+        _journal = journal;
+    }
+    
+    public ValueTask FinalizeJournal()
+    {
+        throw new NotImplementedException();
+    }
+
+    public ValueTask ApplyJournal()
+    {
+        throw new NotImplementedException();
+    }
+
+    public ValueTask RollbackJournal()
+    {
+        throw new NotImplementedException();
+    }
+
+    public void Seek(long position)
+    {
+        throw new NotImplementedException();
+    }
+
+    public void Flush()
+    {
+        throw new NotImplementedException();
+    }
+
+    public int Read(Span<byte> buffer)
+    {
+        throw new NotImplementedException();
+    }
+
+    public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public void Write(ReadOnlySpan<byte> buffer)
+    {
+        throw new NotImplementedException();
+    }
+
+    public ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    void IJournal.Dispose()
+    {
+        throw new NotImplementedException();
+    }
+
+    void IDisposable.Dispose()
+    {
+        throw new NotImplementedException();
+    }
+}
+
 internal static class WalFileJournalHelpers
 {
     internal static void ApplyJournal(Stream origin, Stream journal)

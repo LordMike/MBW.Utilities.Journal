@@ -5,12 +5,12 @@ namespace MBW.Utilities.Journal.Tests;
 public abstract class TestsBase
 {
     protected TestStream TestFile { get; }
-    protected MemoryJournal JournalFileProvider { get; }
+    protected MemoryJournalStreamFactory JournalFileProvider { get; }
 
     protected TestsBase()
     {
         TestFile = new TestStream();
-        JournalFileProvider = new MemoryJournal();
+        JournalFileProvider = new MemoryJournalStreamFactory();
     }
 
     private void ResetFileOffsets()

@@ -28,7 +28,7 @@ internal sealed class FileBasedJournalStreamFactory(string file) : IJournalStrea
         }
         catch (FileNotFoundException)
         {
-            stream = default;
+            stream = null;
             return false;
         }
     }
