@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using MBW.Utilities.Journal.Abstracts;
 
 namespace MBW.Utilities.Journal.Structures;
 

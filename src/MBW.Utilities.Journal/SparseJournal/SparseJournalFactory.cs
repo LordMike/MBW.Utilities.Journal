@@ -40,7 +40,7 @@ internal sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactor
             throw new JournalCorruptedException("Journal header indicates the journal was not committed", false);
 
         journal.Seek(-SparseJournalFooter.StructSize, SeekOrigin.End);
-        if (!JournaledStreamHelpers.TryRead(journal, SparseJournalFileConstants.SparseJournalFooterMagic,
+        if (!JournaledStreamHelpers.TryRead(journal, SparseJournalFooter.ExpectedMagic,
                 out SparseJournalFooter footer))
             throw new InvalidOperationException();
 

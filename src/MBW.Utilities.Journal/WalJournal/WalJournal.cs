@@ -43,7 +43,7 @@ internal sealed class WalJournal : IJournal
 
         WalJournalFooter value = new WalJournalFooter
         {
-            Magic = WalJournalFileConstants.WalJournalFooterMagic,
+            Magic = WalJournalFooter.ExpectedMagic,
             HeaderNonce = _header.Nonce,
             Entries = _journalWrittenSegments,
             FinalLength = finalLength,
@@ -76,9 +76,9 @@ internal sealed class WalJournal : IJournal
         for (int i = 0; i < _footer.Value.Entries; i++)
         {
             WalJournalLocalHeader localHeader = _journal.ReadOne<WalJournalLocalHeader>(tmpLocalHeader);
-            if (localHeader.Magic != WalJournalFileConstants.WalJournalLocalMagic)
+            if (localHeader.Magic != WalJournalLocalHeader.ExpectedMagic)
                 throw new JournalCorruptedException(
-                    $"Bad segment magic, {localHeader.Magic:X4}, expected: {WalJournalFileConstants.WalJournalLocalMagic:X4}",
+                    $"Bad segment magic, {localHeader.Magic:X4}, expected: {WalJournalLocalHeader.ExpectedMagic:X4}",
                     targetHasBeenAltered);
 
             // Read journaled data
@@ -184,7 +184,7 @@ internal sealed class WalJournal : IJournal
         _journal.Seek(0, SeekOrigin.End);
         WalJournalLocalHeader value = new WalJournalLocalHeader
         {
-            Magic = WalJournalFileConstants.WalJournalLocalMagic,
+            Magic = WalJournalLocalHeader.ExpectedMagic,
             InnerOffset = thisWrite.Start,
             Length = (ushort)thisWrite.Length,
             XxHashChecksum = checksum

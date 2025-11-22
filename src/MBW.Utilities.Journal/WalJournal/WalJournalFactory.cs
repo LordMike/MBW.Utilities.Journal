@@ -1,10 +1,8 @@
 ﻿using System.Diagnostics;
-using System.Runtime.InteropServices;
 using MBW.Utilities.Journal.Abstracts;
 using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Extensions;
 using MBW.Utilities.Journal.Helpers;
-using MBW.Utilities.Journal.SparseJournal;
 using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.WalJournal;
@@ -39,7 +37,7 @@ internal sealed class WalJournalFactory : IJournalFactory
             throw new JournalCorruptedException("Journal header indicates the journal was not committed", false);
 
         journal.Seek(-WalJournalFooter.StructSize, SeekOrigin.End);
-        if (!JournaledStreamHelpers.TryRead(journal, WalJournalFileConstants.WalJournalFooterMagic,
+        if (!JournaledStreamHelpers.TryRead(journal, WalJournalFooter.ExpectedMagic,
                 out WalJournalFooter footer))
             throw new InvalidOperationException();
 

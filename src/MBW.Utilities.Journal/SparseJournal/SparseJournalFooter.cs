@@ -1,11 +1,16 @@
 using System.Runtime.InteropServices;
-using MBW.Utilities.Journal.Structures;
+using MBW.Utilities.Journal.Abstracts;
 
 namespace MBW.Utilities.Journal.SparseJournal;
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal struct SparseJournalFooter : IStructWithMagic<ulong>
 {
+    /// <summary>
+    /// "SPRS_END"
+    /// </summary>
+    public const ulong ExpectedMagic = 0x535052535F454E44;
+    
     public static int StructSize { get; } = Marshal.SizeOf(typeof(SparseJournalFooter));
 
     public required ulong Magic;

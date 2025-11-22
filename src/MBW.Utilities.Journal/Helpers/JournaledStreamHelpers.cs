@@ -1,6 +1,6 @@
 ﻿using System.Numerics;
+using MBW.Utilities.Journal.Abstracts;
 using MBW.Utilities.Journal.Extensions;
-using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.Helpers;
 

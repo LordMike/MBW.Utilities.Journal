@@ -48,7 +48,7 @@ internal sealed class SparseJournal : IJournal
 
         SparseJournalFooter footer = new SparseJournalFooter
         {
-            Magic = SparseJournalFileConstants.SparseJournalFooterMagic,
+            Magic = SparseJournalFooter.ExpectedMagic,
             HeaderNonce = _header.Nonce,
             FinalLength = finalLength,
             BlockSize = _blockSize.Power,
