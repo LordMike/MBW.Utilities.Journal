@@ -1,4 +1,5 @@
-﻿using MBW.Utilities.Journal.SparseJournal;
+﻿using System.Diagnostics.CodeAnalysis;
+using MBW.Utilities.Journal.SparseJournal;
 
 namespace MBW.Utilities.Journal;
 
@@ -13,9 +14,29 @@ internal sealed class FileBasedJournalStreamFactory(string file) : IJournalStrea
 
     public void Delete(string identifier) => File.Delete(GetFileName(identifier));
 
+    public bool TryOpen(string identifier, bool createIfMissing, [NotNullWhen(true)] out Stream? stream)
+    {
+        try
+        {
+            FileStream fsStream = File.Open(GetFileName(identifier), FileMode.OpenOrCreate, FileAccess.ReadWrite,
+                FileShare.Read | FileShare.Delete);
+            SparseStreamHelper.MakeStreamSparse(fsStream);
+
+            stream = fsStream;
+
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            stream = default;
+            return false;
+        }
+    }
+
     public Stream OpenOrCreate(string identifier)
     {
-        FileStream fsStream = File.Open(GetFileName(identifier), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read | FileShare.Delete);
+        FileStream fsStream = File.Open(GetFileName(identifier), FileMode.OpenOrCreate, FileAccess.ReadWrite,
+            FileShare.Read | FileShare.Delete);
         SparseStreamHelper.MakeStreamSparse(fsStream);
 
         return fsStream;

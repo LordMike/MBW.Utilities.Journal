@@ -1,5 +1,6 @@
 using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Helpers;
+using Metalama.Patterns.Contracts;
 
 namespace MBW.Utilities.Journal;
 
@@ -25,6 +26,15 @@ public abstract class JournaledStream : Stream
         VirtualOffset = 0;
     }
 
+    [Invariant]
+    private void A()
+    {
+        if (Origin == null)
+        {
+            
+        }
+    }
+    
     public void Commit(bool applyImmediately = true)
     {
         if (!IsJournalOpened(false))

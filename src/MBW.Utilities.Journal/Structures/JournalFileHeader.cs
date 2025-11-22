@@ -10,6 +10,7 @@ internal struct JournalFileHeader : IStructWithMagic<ulong>
     public required ulong Magic;
     public required JournalStrategy Strategy;
     public required ulong Nonce;
+    public required bool Committed;
 
     ulong IStructWithMagic<ulong>.Magic => Magic;
 }
