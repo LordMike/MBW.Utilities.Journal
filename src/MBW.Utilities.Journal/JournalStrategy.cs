@@ -1,6 +1,4 @@
-﻿using MBW.Utilities.Journal.SparseJournal;
-
-namespace MBW.Utilities.Journal;
+﻿namespace MBW.Utilities.Journal;
 
 internal enum JournalStrategy : byte
 {

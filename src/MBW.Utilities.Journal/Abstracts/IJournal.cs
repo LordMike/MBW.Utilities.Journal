@@ -1,19 +1,12 @@
-﻿namespace MBW.Utilities.Journal;
+﻿namespace MBW.Utilities.Journal.Abstracts;
 
-public interface IJournal : IDisposable
+public interface IJournal
 {
-    ValueTask FinalizeJournal();
+    ValueTask FinalizeJournal(long finalLength);
     ValueTask ApplyJournal();
-    ValueTask RollbackJournal();
-
-    void Seek(long position);
 
     void Flush();
 
-    int Read(Span<byte> buffer);
-    ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken);
-    void Write(ReadOnlySpan<byte> buffer);
-    ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken);
-
-    void Dispose();
+    ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken cancellationToken);
+    ValueTask WriteAsync(long offset, ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken);
 }

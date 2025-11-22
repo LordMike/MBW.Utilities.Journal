@@ -1,4 +1,5 @@
-﻿using MBW.Utilities.Journal.Exceptions;
+﻿using MBW.Utilities.Journal.Abstracts;
+using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Helpers;
 using MBW.Utilities.Journal.SparseJournal;
 using MBW.Utilities.Journal.Structures;
@@ -6,22 +7,12 @@ using MBW.Utilities.Journal.WalJournal;
 
 namespace MBW.Utilities.Journal;
 
-[Flags]
-public enum JournalOpenMode
-{
-    None,
-    ApplyCommittedJournals = 1,
-    DiscardUncommittedJournals = 2,
-
-    Default = ApplyCommittedJournals
-}
-
 public static class JournaledStreamFactory
 {
     private static async ValueTask HandleOpenMode(Stream origin, IJournalStreamFactory streamFactory,
         IJournalFactory journalFactory, JournalOpenMode openMode)
     {
-        if (!streamFactory.TryOpen(string.Empty, false, out var journalStream))
+        if (!streamFactory.TryOpen(string.Empty, false, out Stream? journalStream))
             return;
 
         if (!JournaledStreamHelpers.TryRead(journalStream, JournalFileConstants.HeaderMagic,
@@ -47,8 +38,10 @@ public static class JournaledStreamFactory
         if ((openMode & JournalOpenMode.ApplyCommittedJournals) != 0)
         {
             await using (journalStream)
-            using (var journal = journalFactory.Open(origin, journalStream))
+            {
+                IJournal journal = journalFactory.Open(origin, journalStream);
                 await journal.ApplyJournal();
+            }
 
             streamFactory.Delete(string.Empty);
         }
@@ -68,16 +61,18 @@ public static class JournaledStreamFactory
         IJournalStreamFactory journalStreamFactory,
         JournalOpenMode openMode = JournalOpenMode.Default)
     {
-        await HandleOpenMode(origin, journalStreamFactory, TODO, openMode);
+        WalJournalFactory journalFactory = new WalJournalFactory();
+        await HandleOpenMode(origin, journalStreamFactory, journalFactory, openMode);
 
-        return new WalFileJournalStream(origin, journalStreamFactory);
+        return new JournaledStream(origin, journalStreamFactory, journalFactory);
     }
 
     public static Task<JournaledStream> CreateSparseJournal(Stream origin, string journalFile,
         JournalOpenMode openMode = JournalOpenMode.Default) =>
         CreateSparseJournal(origin, new FileBasedJournalStreamFactory(journalFile), openMode);
 
-    public static Task<JournaledStream> CreateSparseJournal(Stream origin, IJournalStreamFactory journalStreamFactory,
+    public static Task<JournaledStream> CreateSparseJournal(Stream origin,
+        IJournalStreamFactory journalStreamFactory,
         JournalOpenMode openMode = JournalOpenMode.Default) =>
         CreateSparseJournal(origin, journalStreamFactory, 12, openMode);
 
@@ -85,8 +80,9 @@ public static class JournaledStreamFactory
         IJournalStreamFactory journalStreamFactory,
         byte blockSize, JournalOpenMode openMode = JournalOpenMode.Default)
     {
-        await HandleOpenMode(origin, journalStreamFactory, TODO, openMode);
+        SparseJournalFactory journalFactory = new SparseJournalFactory(blockSize);
+        await HandleOpenMode(origin, journalStreamFactory, journalFactory, openMode);
 
-        return new SparseJournalStream(origin, journalStreamFactory, blockSize);
+        return new JournaledStream(origin, journalStreamFactory, journalFactory);
     }
 }

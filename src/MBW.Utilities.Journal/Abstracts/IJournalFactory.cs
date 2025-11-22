@@ -1,4 +1,4 @@
-﻿namespace MBW.Utilities.Journal;
+﻿namespace MBW.Utilities.Journal.Abstracts;
 
 public interface IJournalFactory
 {

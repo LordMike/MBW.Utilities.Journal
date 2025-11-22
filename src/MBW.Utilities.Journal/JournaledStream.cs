@@ -1,11 +1,14 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using MBW.Utilities.Journal.Abstracts;
+using MBW.Utilities.Journal.Extensions;
 using MBW.Utilities.Journal.Helpers;
+using MBW.Utilities.Journal.Structures;
 using Metalama.Patterns.Contracts;
 
 namespace MBW.Utilities.Journal;
 
-public sealed class JournaledStreamContracts : Stream
+public partial class JournaledStream : Stream
 {
     private JournaledStreamState _state;
     private readonly IJournalStreamFactory _journalStreamFactory;
@@ -18,7 +21,7 @@ public sealed class JournaledStreamContracts : Stream
     private long _virtualOffset;
     private long _virtualLength;
 
-    public JournaledStreamContracts([Required] Stream origin, [Required] IJournalStreamFactory journalStreamFactory,
+    public JournaledStream([Required] Stream origin, [Required] IJournalStreamFactory journalStreamFactory,
         [Required] IJournalFactory journalFactory)
     {
         if (origin is { CanWrite: false, CanRead: false })
@@ -52,7 +55,18 @@ public sealed class JournaledStreamContracts : Stream
 
             if (_state == JournaledStreamState.JournalOpened)
             {
-                await _journal.FinalizeJournal();
+                await _journal.FinalizeJournal(_virtualLength);
+
+                // Update header
+                _journalStream.Seek(0, SeekOrigin.Begin);
+                if (!JournaledStreamHelpers.TryRead(_journalStream, JournalFileConstants.HeaderMagic,
+                        out JournalFileHeader header))
+                    throw new InvalidOperationException();
+
+                header.Flags |= JournalHeaderFlags.Committed;
+                _journalStream.Seek(0, SeekOrigin.Begin);
+                _journalStream.Write(header.AsSpan());
+
                 _state = JournaledStreamState.JournalFinalized;
             }
 
@@ -79,8 +93,6 @@ public sealed class JournaledStreamContracts : Stream
         RequireState(JournaledStreamState.JournalOpened);
         Contracts.Requires(IsJournalOpened(false));
 
-        await _journal.RollbackJournal();
-
         _virtualOffset = Math.Clamp(_virtualOffset, 0, _origin.Length);
         _virtualLength = _origin.Length;
 
@@ -92,40 +104,19 @@ public sealed class JournaledStreamContracts : Stream
         Contracts.Ensures(_state == JournaledStreamState.Clean, "Rollback transitions to clean");
     }
 
-    public override int Read(Span<byte> buffer)
-    {
-        RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened,
-            JournaledStreamState.JournalFinalized);
-
-        if (_state == JournaledStreamState.Clean)
-        {
-            _origin.Seek(_virtualOffset, SeekOrigin.Begin);
-            var read = _origin.Read(buffer);
-            _virtualOffset += read;
-
-            return read;
-        }
-
-        Contracts.Requires(IsJournalOpened(false));
-
-        {
-            _journal.Seek(_virtualOffset);
-            var read = _journal.Read(buffer);
-            _virtualOffset += read;
-
-            return read;
-        }
-    }
-
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
         RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened,
             JournaledStreamState.JournalFinalized);
 
+        // Trim down the read to match the length of the stream, at most
+        int maxToRead = (int)Math.Min(_virtualLength - _virtualOffset, buffer.Length);
+        buffer = buffer.Slice(0, maxToRead);
+
         if (_state == JournaledStreamState.Clean)
         {
             _origin.Seek(_virtualOffset, SeekOrigin.Begin);
-            var read = await _origin.ReadAsync(buffer, cancellationToken);
+            int read = await _origin.ReadAsync(buffer, cancellationToken);
             _virtualOffset += read;
 
             return read;
@@ -134,24 +125,11 @@ public sealed class JournaledStreamContracts : Stream
         Contracts.Requires(IsJournalOpened(false));
 
         {
-            _journal.Seek(_virtualOffset);
-            var read = await _journal.ReadAsync(buffer, cancellationToken);
+            int read = await _journal.ReadAsync(_virtualOffset, buffer, cancellationToken);
             _virtualOffset += read;
 
             return read;
         }
-    }
-
-    public override void Write(ReadOnlySpan<byte> buffer)
-    {
-        RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened);
-        Contracts.Requires(IsJournalOpened(true));
-
-        _journal.Seek(_virtualOffset);
-        _journal.Write(buffer);
-
-        _virtualOffset += buffer.Length;
-        _virtualLength = Math.Max(_virtualOffset, _virtualLength);
     }
 
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
@@ -160,8 +138,7 @@ public sealed class JournaledStreamContracts : Stream
         RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened);
         Contracts.Requires(IsJournalOpened(true));
 
-        _journal.Seek(_virtualOffset);
-        await _journal.WriteAsync(buffer, cancellationToken);
+        await _journal.WriteAsync(_virtualOffset, buffer, cancellationToken);
 
         _virtualOffset += buffer.Length;
         _virtualLength = Math.Max(_virtualOffset, _virtualLength);
@@ -191,7 +168,7 @@ public sealed class JournaledStreamContracts : Stream
     {
         RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened,
             JournaledStreamState.JournalFinalized);
-        
+
         long newOffset = origin switch
         {
             SeekOrigin.Begin => offset,
@@ -237,11 +214,7 @@ public sealed class JournaledStreamContracts : Stream
 
     private void CloseJournal(bool discard)
     {
-        if (_journal != null)
-        {
-            _journal.Dispose();
-            _journal = null;
-        }
+        _journal = null;
 
         if (_journalStream != null)
         {
@@ -306,23 +279,22 @@ public sealed class JournaledStreamContracts : Stream
         Contracts.Invariant(_state != JournaledStreamState.Unset, "State must be initialized");
         Contracts.Invariant(_virtualOffset >= 0, "Virtual offset must be non-negative");
         Contracts.Invariant(_virtualLength >= 0, "Virtual length must be non-negative");
-        Contracts.Invariant(_virtualOffset <= _virtualLength || _state == JournaledStreamState.JournalFinalized,
-            "Virtual offset should not exceed the virtual length unless finalizing");
+        Contracts.Invariant(_virtualOffset <= _origin.Length);
+        Contracts.Invariant((_journal == null) == (_journalStream == null));
 
         if (_state == JournaledStreamState.Clean)
         {
-            Contracts.Invariant(_virtualOffset <= _origin.Length);
             Contracts.Invariant(_virtualLength == _origin.Length);
 
-            Contracts.Invariant(_journal == null && _journalStream == null);
+            Contracts.Invariant(_journal == null);
         }
         else if (_state == JournaledStreamState.Closed)
         {
-            Contracts.Invariant(_journal == null && _journalStream == null);
+            Contracts.Invariant(_journal == null);
         }
         else if (_state is JournaledStreamState.JournalOpened or JournaledStreamState.JournalFinalized)
         {
-            Contracts.Invariant(_journal != null && _journalStream != null);
+            Contracts.Invariant(_journal != null);
         }
     }
 }

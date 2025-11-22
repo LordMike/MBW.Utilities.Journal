@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace MBW.Utilities.Journal;
+namespace MBW.Utilities.Journal.Abstracts;
 
 public interface IJournalStreamFactory
 {

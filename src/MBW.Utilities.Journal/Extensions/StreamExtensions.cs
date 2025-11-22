@@ -33,7 +33,24 @@ internal static class StreamExtensions
         int totalRead = 0;
         while (buffer.Length > 0)
         {
-            var read = source.Read(buffer);
+            int read = source.Read(buffer);
+            totalRead += read;
+
+            if (read <= 0)
+                return totalRead;
+
+            buffer = buffer.Slice(read);
+        }
+
+        return totalRead;
+    }
+    
+    public static async ValueTask<int> ReadUpToAsync(this Stream source, Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        int totalRead = 0;
+        while (buffer.Length > 0)
+        {
+            int read = await source.ReadAsync(buffer, cancellationToken);
             totalRead += read;
 
             if (read <= 0)

@@ -14,12 +14,4 @@ internal static class JournaledStreamHelpers
 
         return header.Magic == expectedMagic;
     }
-
-    public static void CheckOriginStreamRequirements(Stream origin)
-    {
-        if (origin is { CanWrite: false, CanRead: false })
-            throw new ArgumentException("Must be able to write or read from origin", nameof(origin));
-        if (origin is { CanSeek: false })
-            throw new ArgumentException("Must be able to seek from origin", nameof(origin));
-    }
 }

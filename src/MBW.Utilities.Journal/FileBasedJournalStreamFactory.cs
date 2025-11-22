@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using MBW.Utilities.Journal.Abstracts;
 using MBW.Utilities.Journal.SparseJournal;
 
 namespace MBW.Utilities.Journal;
