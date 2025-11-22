@@ -126,6 +126,8 @@ public partial class JournaledStream : Stream
 
         {
             int read = await _journal.ReadAsync(_virtualOffset, buffer, cancellationToken);
+            Debug.Assert(read >= 0 && read <= buffer.Length);
+
             _virtualOffset += read;
 
             return read;
@@ -137,6 +139,9 @@ public partial class JournaledStream : Stream
     {
         RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened);
         Contracts.Requires(IsJournalOpened(true));
+
+        if (buffer.Length == 0)
+            return;
 
         await _journal.WriteAsync(_virtualOffset, buffer, cancellationToken);
 

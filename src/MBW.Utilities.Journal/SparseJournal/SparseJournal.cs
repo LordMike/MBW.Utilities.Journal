@@ -57,7 +57,6 @@ internal sealed class SparseJournal : IJournal
         };
 
         _footer = footer;
-
         _journal.Write(footer.AsSpan());
         await _journal.FlushAsync();
     }

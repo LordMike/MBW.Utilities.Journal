@@ -41,6 +41,9 @@ internal sealed class WalJournalFactory : IJournalFactory
                 out WalJournalFooter footer))
             throw new InvalidOperationException();
 
+        if (header.Nonce != footer.HeaderNonce)
+            throw new JournalCorruptedException("Journal header was corrupted, footer did not match headers info", false);
+        
         return new WalJournal(origin, journal, header, footer);
     }
 }

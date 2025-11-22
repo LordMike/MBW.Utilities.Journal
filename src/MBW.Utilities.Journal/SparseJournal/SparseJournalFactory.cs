@@ -44,10 +44,19 @@ internal sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactor
                 out SparseJournalFooter footer))
             throw new InvalidOperationException();
 
+        if (header.Nonce != footer.HeaderNonce)
+            throw new JournalCorruptedException("Journal header was corrupted, footer did not match headers info",
+                false);
+
         // Read bitmap
         journal.Seek((long)footer.StartOfBitmap, SeekOrigin.Begin);
 
         List<ulong> bitmap = new List<ulong>((int)footer.BitmapLengthUlongs);
+        
+        // Allocate the N ulongs - TODO, find a better way than this
+        for (int i = 0; i < footer.BitmapLengthUlongs; i++)
+            bitmap.Add(0);
+        
         Span<byte> bitmapBytes = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(bitmap));
         journal.ReadExactly(bitmapBytes);
 

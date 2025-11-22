@@ -14,8 +14,8 @@ internal sealed class WalJournal : IJournal
     private readonly Stream _origin;
     private readonly Stream _journal;
     private readonly JournalFileHeader _header;
-    private readonly WalJournalFooter? _footer;
-    private readonly QuickIntervalTree<long, JournalSegment> _journalSegments;
+    private WalJournalFooter? _footer;
+    private readonly QuickIntervalTree<long, JournalSegment> _journalSegments = [];
 
     private uint _journalWrittenSegments;
     private ushort _journalMaxSegmentDataLength;
@@ -26,7 +26,6 @@ internal sealed class WalJournal : IJournal
         _journal = journal;
         _header = header;
         _footer = null;
-        _journalSegments = [];
     }
 
     public WalJournal(Stream origin, Stream journal, JournalFileHeader header, WalJournalFooter footer)
@@ -41,7 +40,7 @@ internal sealed class WalJournal : IJournal
     {
         _journal.Seek(0, SeekOrigin.End);
 
-        WalJournalFooter value = new WalJournalFooter
+        WalJournalFooter footer = new WalJournalFooter
         {
             Magic = WalJournalFooter.ExpectedMagic,
             HeaderNonce = _header.Nonce,
@@ -50,7 +49,8 @@ internal sealed class WalJournal : IJournal
             MaxEntryDataLength = _journalMaxSegmentDataLength
         };
 
-        _journal.Write(value.AsSpan());
+        _footer = footer;
+        _journal.Write(footer.AsSpan());
         await _journal.FlushAsync();
     }
 
