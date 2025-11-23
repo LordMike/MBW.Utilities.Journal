@@ -8,11 +8,11 @@ namespace MBW.Utilities.Journal.Tests;
 public class WalTests : TestsBase
 {
     [Fact]
-    public void ReadAdvancesPositionWhenJournalHasUncommittedData()
+    public async Task ReadAdvancesPositionWhenJournalHasUncommittedData()
     {
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             const string data = "ABCDEF";
             journaledStream.WriteStr(data);
@@ -29,18 +29,18 @@ public class WalTests : TestsBase
     }
 
     [Fact]
-    public void PositionSetterRejectsNegativeValues()
+    public async Task PositionSetterRejectsNegativeValues()
     {
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             Assert.Throws<ArgumentOutOfRangeException>(() => journaledStream.Position = -1);
         });
     }
 
     [Fact]
-    public void JournalFileCorruptionTest_PartialCorrupt()
+    public async Task JournalFileCorruptionTest_PartialCorrupt()
     {
         char[] expectedTransacted = new char[Math.Max("Clean".Length, "Corrupt".Length)];
         "Clean".CopyTo(expectedTransacted);
@@ -48,17 +48,15 @@ public class WalTests : TestsBase
 
         TestFile.WriteStr("Clean");
 
-        RunScenario<TestStreamBlockedException>(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream1 = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream1 = await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream1.WriteStr("Corrupt");
             Assert.Equal(expectedTransacted, journaledStream1.ReadFullStr().AsSpan());
 
-            // Trigger an unwriteable file
-            TestFile.LockWrites = true;
-
-            journaledStream1.Commit();
+            // Simulate crash by snapshotting journal mid-commit
+            await journaledStream1.Commit(applyImmediately: false);
         });
 
         Assert.True(JournalFileProvider.Exists(string.Empty));
@@ -75,9 +73,9 @@ public class WalTests : TestsBase
         journalFile.Write(buffer);
 
         // Verify the journal is detected as not being valid (corrupt data)
-        JournalCorruptedException ex = RunScenario<JournalCorruptedException>(() =>
+        JournalCorruptedException ex = await RunScenarioAsync<JournalCorruptedException>(async () =>
         {
-            using JournaledStream journaledStream = JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
         });
 
         Assert.True(ex.OriginalFileHasBeenAltered);

@@ -1,11 +1,12 @@
-﻿using MBW.Utilities.Journal.Exceptions;
+﻿using MBW.Utilities.Journal.Abstracts;
+using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Tests.Helpers;
 
 namespace MBW.Utilities.Journal.Tests;
 
 public class GenericTests : TestsBase
 {
-    public delegate JournaledStream CreateDelegate(Stream origin, IJournalStreamFactory journalStreamFactory);
+    public delegate Task<JournaledStream> CreateDelegate(Stream origin, IJournalStreamFactory journalStreamFactory, JournalOpenMode openMode = JournalOpenMode.Default);
 
     public static IEnumerable<object[]> GetTestStreams()
     {
@@ -24,25 +25,25 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void RollbackAfterCommitTest(CreateDelegate createDelegate)
+    public async Task RollbackAfterCommitTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("Initial");
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
 
             // Write data and commit
             journaledStream.WriteStr("CommittedData");
-            journaledStream.Commit();
+            await journaledStream.Commit();
 
             // Write more data without committing
             journaledStream.WriteStr("UncommittedData");
 
             // Rollback should remove uncommitted data
-            journaledStream.Rollback();
+            await journaledStream.Rollback();
         });
 
         // Check if file only has the committed data
@@ -51,16 +52,16 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void EmptyTransactionCommitTest(CreateDelegate createDelegate)
+    public async Task EmptyTransactionCommitTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("InitialData");
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Commit without writing
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         // Ensure no changes are made to the file
@@ -70,20 +71,20 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void BoundaryConditionWritesTest(CreateDelegate createDelegate)
+    public async Task BoundaryConditionWritesTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("Data");
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Position at the end of the current data
             journaledStream.Seek(0, SeekOrigin.End);
 
             // Write exactly at the end
             journaledStream.WriteStr("End");
-            journaledStream.Commit();
+            await journaledStream.Commit();
 
             // Verify if the file has appended the data correctly
             Assert.Equal("DataEnd", journaledStream.ReadFullStr());
@@ -91,7 +92,7 @@ public class GenericTests : TestsBase
             // Now seek beyond the end and write more data
             journaledStream.Seek(10, SeekOrigin.Begin);
             journaledStream.WriteStr("Beyond");
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         // Check if the new data starts from position 10, filling with zeros if needed
@@ -100,11 +101,11 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void NonSequentialWritesTest(CreateDelegate createDelegate)
+    public async Task NonSequentialWritesTest(CreateDelegate createDelegate)
     {
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Write data at the start
             journaledStream.WriteStr("0123456789");
@@ -139,7 +140,7 @@ public class GenericTests : TestsBase
             journaledStream.WriteStr("88774466");
             Assert.Equal("9876588774466", journaledStream.ReadFullStr());
 
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         // Check final result
@@ -148,13 +149,13 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void EOFBehaviorTest(CreateDelegate createDelegate)
+    public async Task EOFBehaviorTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("12345");
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Attempt to read at EOF
             journaledStream.Seek(0, SeekOrigin.End); // Move to the end of the data
@@ -165,7 +166,7 @@ public class GenericTests : TestsBase
 
             // Write at EOF
             journaledStream.WriteStr("6789");
-            journaledStream.Commit();
+            await journaledStream.Commit();
 
             // Verify if the new data is appended correctly
             Assert.Equal("123456789", journaledStream.ReadFullStr());
@@ -173,7 +174,7 @@ public class GenericTests : TestsBase
             // Seek beyond EOF and try to write
             journaledStream.Seek(15, SeekOrigin.Begin);
             journaledStream.WriteStr("End");
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         // Check for zero padding and the new data
@@ -182,7 +183,7 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void JournalFileCorruptionTest_FullyCorrupt(CreateDelegate createDelegate)
+    public async Task JournalFileCorruptionTest_FullyCorrupt(CreateDelegate createDelegate)
     {
         char[] expectedTransacted = new char[Math.Max("Clean".Length, "Corrupt".Length)];
         "Clean".CopyTo(expectedTransacted);
@@ -190,17 +191,14 @@ public class GenericTests : TestsBase
 
         TestFile.WriteStr("Clean");
 
-        RunScenario<TestStreamBlockedException>(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream1 = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream1 = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream1.WriteStr("Corrupt");
             Assert.Equal(expectedTransacted, journaledStream1.ReadFullStr().AsSpan());
 
-            // Trigger an unwriteable file
-            TestFile.LockWrites = true;
-
-            journaledStream1.Commit();
+            await journaledStream1.Commit(false);
         });
 
         Assert.True(JournalFileProvider.Exists(string.Empty));
@@ -217,15 +215,15 @@ public class GenericTests : TestsBase
         });
 
         // Verify the journal is detected as not being valid (missing header)
-        RunScenario<JournalCorruptedException>(() =>
+        await RunScenarioAsync<JournalCorruptedException>(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
         });
 
         // The journal must not be removed. The user must figure out what to do
-        RunScenario<JournalCorruptedException>(() =>
+        await RunScenarioAsync<JournalCorruptedException>(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
         });
 
         // Verify that the original data is still intact
@@ -234,7 +232,7 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void RecoverCommitedTest(CreateDelegate createDelegate)
+    public async Task RecoverCommitedTest(CreateDelegate createDelegate)
     {
         char[] expectedTransacted = new char[Math.Max("Initial".Length, "HeldBack".Length)];
         "Initial".CopyTo(expectedTransacted);
@@ -242,15 +240,15 @@ public class GenericTests : TestsBase
 
         TestFile.WriteStr("Initial");
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream1 = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream1 = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream1.WriteStr("HeldBack");
             Assert.Equal(expectedTransacted, journaledStream1.ReadFullStr().AsSpan());
 
             // Commit, but do not apply yet
-            journaledStream1.Commit(false);
+            await journaledStream1.Commit(false);
         });
 
         // File does not see "HeldBack"
@@ -258,10 +256,10 @@ public class GenericTests : TestsBase
         Assert.Equal("Initial", TestFile.ReadFullStr());
 
         // We should commit the journal at this point
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
             // This should auto-apply the committed stream
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Original & transacted file should see "HeldBack"
             // The journal should have been replayed
@@ -276,14 +274,14 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void RecoverUncommitedTest(CreateDelegate createDelegate)
+    public async Task RecoverUncommitedTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("Initially");
 
         // A journal is made, but is not committed
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.WriteStr("NotSeen");
 
@@ -298,9 +296,9 @@ public class GenericTests : TestsBase
         Assert.True(JournalFileProvider.HasAnyJournal);
 
         // Once reopened, the journal should be discarded
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             Assert.Equal("Initially", journaledStream.ReadFullStr());
             Assert.False(JournalFileProvider.HasAnyJournal);
@@ -312,13 +310,13 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void RollbackTest(CreateDelegate createDelegate)
+    public async Task RollbackTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("Alpha");
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
 
@@ -328,7 +326,7 @@ public class GenericTests : TestsBase
             Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
             Assert.True(JournalFileProvider.HasAnyJournal);
 
-            journaledStream.Rollback();
+            await journaledStream.Rollback();
 
             // Post-rollback
             Assert.Equal("Alpha", journaledStream.ReadFullStr());
@@ -341,11 +339,11 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void DoubleCommitTest(CreateDelegate createDelegate)
+    public async Task DoubleCommitTest(CreateDelegate createDelegate)
     {
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Initial commit
             journaledStream.WriteStr("Alpha");
@@ -353,7 +351,7 @@ public class GenericTests : TestsBase
             Assert.Equal("Alpha", journaledStream.ReadFullStr());
             Assert.True(JournalFileProvider.HasAnyJournal);
 
-            journaledStream.Commit();
+            await journaledStream.Commit();
 
             // Post-commit
             Assert.Equal("Alpha", journaledStream.ReadFullStr());
@@ -364,7 +362,7 @@ public class GenericTests : TestsBase
             Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
             Assert.True(JournalFileProvider.HasAnyJournal);
 
-            journaledStream.Commit();
+            await journaledStream.Commit();
 
             // Post-commit
             Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
@@ -377,27 +375,27 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void DeferredCommitApplyTest(CreateDelegate createDelegate)
+    public async Task DeferredCommitApplyTest(CreateDelegate createDelegate)
     {
         TestFile.WriteStr("Original");
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
             journaledStream.WriteStr("Delayed");
 
             Assert.Equal("OriginalDelayed", journaledStream.ReadFullStr());
 
-            journaledStream.Commit(applyImmediately: false);
+            await journaledStream.Commit(applyImmediately: false);
 
             Assert.Throws<JournalCommittedButNotAppliedException>(() => journaledStream.WriteStr("Again"));
 
             Assert.Equal("Original", TestFile.ReadFullStr());
             Assert.True(JournalFileProvider.HasAnyJournal);
 
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         Assert.False(JournalFileProvider.HasAnyJournal);
@@ -406,11 +404,11 @@ public class GenericTests : TestsBase
 
     [Theory]
     [MemberData(nameof(GetTestStreams))]
-    public void SimpleTest(CreateDelegate createDelegate)
+    public async Task SimpleTest(CreateDelegate createDelegate)
     {
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.WriteStr("Begin");
             Assert.Equal(5, journaledStream.Length);
@@ -424,29 +422,29 @@ public class GenericTests : TestsBase
             Assert.Equal(11, journaledStream.Length);
             Assert.Equal("BeginMidEnd", journaledStream.ReadFullStr());
 
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         Assert.Equal("BeginMidEnd", TestFile.ReadFullStr());
         Assert.False(JournalFileProvider.HasAnyJournal);
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(3, SeekOrigin.Begin);
             journaledStream.WriteStr("u");
             Assert.Equal("BegunMidEnd", journaledStream.ReadFullStr());
 
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         Assert.Equal("BegunMidEnd", TestFile.ReadFullStr());
         Assert.False(JournalFileProvider.HasAnyJournal);
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
             journaledStream.WriteStr("PostStuff");
@@ -458,21 +456,21 @@ public class GenericTests : TestsBase
 
             Assert.Equal("BeganMidEndPostStuff", journaledStream.ReadFullStr());
 
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         Assert.Equal("BeganMidEndPostStuff", TestFile.ReadFullStr());
         Assert.False(JournalFileProvider.HasAnyJournal);
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = createDelegate(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.SetLength(8);
 
             Assert.Equal("BeganMid", journaledStream.ReadFullStr());
 
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         Assert.Equal("BeganMid", TestFile.ReadFullStr());

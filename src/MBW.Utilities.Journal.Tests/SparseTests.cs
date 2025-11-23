@@ -6,7 +6,7 @@ namespace MBW.Utilities.Journal.Tests;
 public class SparseTests : TestsBase
 {
     [Fact]
-    public void LargerThanBlockSizeSparseJournalStreamTest()
+    public async Task LargerThanBlockSizeSparseJournalStreamTest()
     {
         // Use 512-byte blocks
         BlockSize blockSize = BlockSize.FromSize(512);
@@ -15,12 +15,12 @@ public class SparseTests : TestsBase
         byte[] firstBuffer = new byte[blockSize.Size * 8 * sizeof(ulong) + 10];
         Random.Shared.NextBytes(firstBuffer);
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
+            using JournaledStream journaledStream = await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
 
             journaledStream.Write(firstBuffer);
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         byte[] actual = TestFile.ReadFullBytes();
@@ -29,12 +29,12 @@ public class SparseTests : TestsBase
         byte[] seconBuffer = new byte[1000];
         Random.Shared.NextBytes(seconBuffer);
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
+            using JournaledStream journaledStream = await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
 
             journaledStream.Write(seconBuffer);
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         byte[] expected = new byte[Math.Max(firstBuffer.Length, seconBuffer.Length)];
@@ -46,7 +46,7 @@ public class SparseTests : TestsBase
     }
 
     [Fact]
-    public void LargerFile()
+    public async Task LargerFile()
     {
         // Use 4096-byte blocks
         BlockSize blockSize = BlockSize.FromSize(4096);
@@ -55,9 +55,9 @@ public class SparseTests : TestsBase
         byte[] expected = new byte[800 * 1024];
         Random.Shared.NextBytes(expected);
 
-        RunScenario(() =>
+        await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
+            using JournaledStream journaledStream = await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
 
             // Write in smaller random increments
             Span<byte> remaining = expected.AsSpan();
@@ -70,7 +70,7 @@ public class SparseTests : TestsBase
                 journaledStream.Write(buffer);
             }
 
-            journaledStream.Commit();
+            await journaledStream.Commit();
         });
 
         byte[] actual = TestFile.ReadFullBytes();

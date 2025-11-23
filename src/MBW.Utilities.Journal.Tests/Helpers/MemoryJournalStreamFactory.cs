@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using MBW.Utilities.Journal.Abstracts;
 
 namespace MBW.Utilities.Journal.Tests.Helpers;
 
@@ -14,8 +15,7 @@ public sealed class MemoryJournalStreamFactory : IJournalStreamFactory
 
     public void Delete(string identifier)
     {
-        if (_streams.Remove(identifier, out var removed))
-            removed.Lock = true;
+        _streams.Remove(identifier);
     }
 
     public bool TryOpen(string identifier, bool createIfMissing, [NotNullWhen(true)] out Stream? stream)
@@ -37,5 +37,13 @@ public sealed class MemoryJournalStreamFactory : IJournalStreamFactory
         _streams.Add(identifier, tmpStream);
         stream = tmpStream;
         return true;
+    }
+
+    public Stream OpenOrCreate(string identifier)
+    {
+        if (!TryOpen(identifier, true, out Stream? stream))
+            throw new InvalidOperationException("Unable to open or create in-memory journal stream");
+
+        return stream;
     }
 }

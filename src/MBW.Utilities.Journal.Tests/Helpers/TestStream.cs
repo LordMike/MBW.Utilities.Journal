@@ -9,37 +9,26 @@ public class TestStream : Stream
         _streamImplementation = new MemoryStream();
     }
 
-    public bool LockWrites { get; set; }
-    public bool LockReads { get; set; }
-
-    public bool Lock
+    public TestStream Clone()
     {
-        set => LockWrites = LockReads = value;
+        if (_streamImplementation is not MemoryStream mem)
+            throw new InvalidOperationException("Can only snapshot memory streams");
+
+        return new TestStream
+        {
+            _streamImplementation = new MemoryStream(mem.ToArray())
+        };
     }
 
     public override void Flush() => _streamImplementation.Flush();
 
     public override int Read(byte[] buffer, int offset, int count)
-    {
-        if (LockReads)
-            throw new TestStreamBlockedException("Reading is prohibited");
-        return _streamImplementation.Read(buffer, offset, count);
-    }
+        => _streamImplementation.Read(buffer, offset, count);
 
     public override long Seek(long offset, SeekOrigin origin) => _streamImplementation.Seek(offset, origin);
-    public override void SetLength(long value)
-    {
-        if (LockWrites)
-            throw new TestStreamBlockedException("Writing/seeking is prohibited");
-        _streamImplementation.SetLength(value);
-    }
+    public override void SetLength(long value) => _streamImplementation.SetLength(value);
 
-    public override void Write(byte[] buffer, int offset, int count)
-    {
-        if (LockWrites)
-            throw new TestStreamBlockedException("Writing is prohibited");
-        _streamImplementation.Write(buffer, offset, count);
-    }
+    public override void Write(byte[] buffer, int offset, int count) => _streamImplementation.Write(buffer, offset, count);
 
     public override bool CanRead => _streamImplementation.CanRead;
     public override bool CanSeek => _streamImplementation.CanSeek;

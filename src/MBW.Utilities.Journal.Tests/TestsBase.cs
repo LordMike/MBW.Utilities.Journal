@@ -16,26 +16,24 @@ public abstract class TestsBase
     private void ResetFileOffsets()
     {
         TestFile.Seek(0, SeekOrigin.Begin);
-        TestFile.Lock = false;
-
         foreach ((string? _, var testStream) in JournalFileProvider.Streams)
         {
             testStream.Seek(0, SeekOrigin.Begin);
-            testStream.Lock = false;
         }
     }
 
-    protected void RunScenario(Action @delegate)
+    protected Task RunScenarioAsync(Func<Task> @delegate)
     {
         ResetFileOffsets();
-        @delegate();
+        Task task = @delegate();
         ResetFileOffsets();
+        return task;
     }
 
-    protected TException RunScenario<TException>(Action @delegate) where TException : Exception
+    protected async Task<TException> RunScenarioAsync<TException>(Func<Task> @delegate) where TException : Exception
     {
         ResetFileOffsets();
-        TException except = Assert.Throws<TException>(@delegate);
+        TException except = await Assert.ThrowsAsync<TException>(async () => await @delegate());
         ResetFileOffsets();
 
         return except;

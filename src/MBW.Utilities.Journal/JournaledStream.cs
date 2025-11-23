@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using MBW.Utilities.Journal.Abstracts;
@@ -177,9 +178,44 @@ public sealed class JournaledStream : Stream
         _journal?.Flush();
     }
 
-    public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan().Slice(offset, count));
+    public override int Read(byte[] buffer, int offset, int count) =>
+        ReadAsync(buffer.AsMemory(offset, count)).GetAwaiter().GetResult();
 
-    public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan().Slice(offset, count));
+    public override int Read(Span<byte> buffer)
+    {
+        // Bridge sync call into async core
+        byte[] tmp = ArrayPool<byte>.Shared.Rent(buffer.Length);
+        try
+        {
+            // Avoid double-implementing read, by bridging. We just hope the caller used ConfigureAwait(false) if they needed to.
+            int read = ReadAsync(tmp.AsMemory(0, buffer.Length)).GetAwaiter().GetResult();
+            tmp.AsSpan(0, read).CopyTo(buffer);
+            return read;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(tmp);
+        }
+    }
+
+    public override void Write(byte[] buffer, int offset, int count) =>
+        WriteAsync(buffer.AsMemory(offset, count)).GetAwaiter().GetResult();
+
+    public override void Write(ReadOnlySpan<byte> buffer)
+    {
+        // Bridge sync call into async core
+        byte[] tmp = ArrayPool<byte>.Shared.Rent(buffer.Length);
+        try
+        {
+            // Avoid double-implementing read, by bridging. We just hope the caller used ConfigureAwait(false) if they needed to.
+            buffer.CopyTo(tmp);
+            WriteAsync(tmp.AsMemory(0, buffer.Length)).GetAwaiter().GetResult();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(tmp);
+        }
+    }
 
     public override void SetLength(long value)
     {
