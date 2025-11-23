@@ -77,7 +77,15 @@ public static class JournaledStreamFactory
     }
 
     /// <summary>
-    /// 
+    /// Creates a journaled stream backed by a write-ahead log (WAL) journal. WAL appends change segments, making small or localized edits fast to stage and commit,
+    /// while many dispersed edits will grow the log and can slow apply time. Use when you want simple append-only journaling with strong recovery semantics.
+    /// Example:
+    /// <code>
+    /// await using var file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite);
+    /// await using var js = await JournaledStreamFactory.CreateWalJournal(file, path + ".jrnl");
+    /// js.Write(Encoding.UTF8.GetBytes("Hello"));
+    /// await js.Commit();
+    /// </code>
     /// </summary>
     /// <param name="origin">Underlying stream to be journaled.</param>
     /// <param name="journalFile">A file path to the journal, usually for files, this could be FILENAME.jrnl.</param>
@@ -106,15 +114,51 @@ public static class JournaledStreamFactory
         return CreateJournal(origin, journalStreamFactory, journalFactory, openMode);
     }
 
+    /// <summary>
+    /// Creates a journaled stream backed by a sparse block journal. Sparse journals track dirty blocks via bitmap and write full blocks,
+    /// making them efficient for larger block-aligned writes and stable apply times even with many edits; small scattered writes may incur more overhead.
+    /// Example:
+    /// <code>
+    /// await using var file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite);
+    /// await using var js = await JournaledStreamFactory.CreateSparseJournal(file, path + ".jrnl");
+    /// js.Write(Encoding.UTF8.GetBytes("Hello"));
+    /// await js.Commit();
+    /// </code>
+    /// </summary>
+    /// <param name="origin">Underlying stream to be journaled.</param>
+    /// <param name="journalFile">A file path to the journal, usually for files, this could be FILENAME.jrnl.</param>
+    /// <param name="openMode">Controls whether to apply committed journals or discard uncommitted ones when present.</param>
+    /// <returns>A journaled stream, configured with the Sparse file strategy</returns>
+    /// <exception cref="JournalCorruptedException">Thrown when an uncommitted or corrupt journal is present and the open mode does not allow discarding.</exception>
+    /// <exception cref="JournalCommittedButNotAppliedException">Thrown when a committed journal is present and the open mode does not allow applying it.</exception>
     public static Task<JournaledStream> CreateSparseJournal(Stream origin, string journalFile,
         JournalOpenMode openMode = JournalOpenMode.Default) =>
         CreateSparseJournal(origin, new FileBasedJournalStreamFactory(journalFile), openMode);
 
+    /// <summary>
+    /// <inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,MBW.Utilities.Journal.JournalOpenMode)"/>
+    /// </summary>
+    /// <param name="origin">Underlying stream to be journaled.</param>
+    /// <param name="journalStreamFactory">A producer for journal streams.</param>
+    /// <param name="openMode">Controls whether to apply committed journals or discard uncommitted ones when present.</param>
+    /// <returns><inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,MBW.Utilities.Journal.JournalOpenMode)"/></returns>
+    /// <exception cref="JournalCorruptedException">Thrown when an uncommitted or corrupt journal is present and the open mode does not allow discarding.</exception>
+    /// <exception cref="JournalCommittedButNotAppliedException">Thrown when a committed journal is present and the open mode does not allow applying it.</exception>
     public static Task<JournaledStream> CreateSparseJournal(Stream origin,
         IJournalStreamFactory journalStreamFactory,
         JournalOpenMode openMode = JournalOpenMode.Default) =>
         CreateSparseJournal(origin, journalStreamFactory, 12, openMode);
 
+    /// <summary>
+    /// <inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,MBW.Utilities.Journal.JournalOpenMode)"/>
+    /// </summary>
+    /// <param name="origin">Underlying stream to be journaled.</param>
+    /// <param name="journalStreamFactory">A producer for journal streams.</param>
+    /// <param name="blockSize">The block size to use for aligned writes. All writes must be aligned internally. Smaller block sizes favor smaller edits, while larger are more suited for large edits. Block size is expressed in a power of two, like 12 for 1024 bytes.</param>
+    /// <param name="openMode">Controls whether to apply committed journals or discard uncommitted ones when present.</param>
+    /// <returns><inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,MBW.Utilities.Journal.JournalOpenMode)"/></returns>
+    /// <exception cref="JournalCorruptedException">Thrown when an uncommitted or corrupt journal is present and the open mode does not allow discarding.</exception>
+    /// <exception cref="JournalCommittedButNotAppliedException">Thrown when a committed journal is present and the open mode does not allow applying it.</exception>
     public static Task<JournaledStream> CreateSparseJournal(Stream origin,
         IJournalStreamFactory journalStreamFactory,
         byte blockSize, JournalOpenMode openMode = JournalOpenMode.Default)
