@@ -6,7 +6,7 @@ namespace MBW.Utilities.Journal.Helpers;
 
 internal static class JournaledStreamHelpers
 {
-    public static bool TryRead<TStruct, TMagic>(Stream stream, TMagic expectedMagic, out TStruct header) where TStruct : unmanaged, IStructWithMagic<TMagic> where TMagic : INumber<TMagic>
+    internal static bool TryRead<TStruct, TMagic>(Stream stream, TMagic expectedMagic, out TStruct header) where TStruct : unmanaged, IStructWithMagic<TMagic> where TMagic : INumber<TMagic>
     {
         header = stream.ReadOneIfEnough<TStruct>(stackalloc byte[TStruct.StructSize], out bool success);
         if (!success)

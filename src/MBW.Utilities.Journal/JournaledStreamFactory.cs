@@ -18,7 +18,7 @@ public static class JournaledStreamFactory
         if (!streamFactory.TryOpen(string.Empty, false, out Stream? journalStream))
             return;
 
-        if (!JournaledStreamHelpers.TryRead(journalStream, JournalFileConstants.HeaderMagic,
+        if (!JournaledStreamHelpers.TryRead(journalStream, JournalFileHeader.ExpectedMagic,
                 out JournalFileHeader header) ||
             (header.Flags & JournalHeaderFlags.Committed) == 0)
         {

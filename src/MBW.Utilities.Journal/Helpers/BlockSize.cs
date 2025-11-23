@@ -7,9 +7,9 @@ namespace MBW.Utilities.Journal.Helpers;
 [DebuggerDisplay("BlockSize 2^{Power} => {Size}")]
 internal readonly struct BlockSize
 {
-    public readonly byte Power;
-    public readonly uint Size;
-    public readonly ulong Mask;
+    internal readonly byte Power;
+    internal readonly uint Size;
+    internal readonly ulong Mask;
 
     private BlockSize(byte power)
     {
@@ -18,7 +18,7 @@ internal readonly struct BlockSize
         Mask = Size - 1;
     }
 
-    public static BlockSize FromPowerOfTwo(byte power)
+    internal static BlockSize FromPowerOfTwo(byte power)
     {
         if (power > 31)
             throw new ArgumentOutOfRangeException(nameof(power), "Power must be at most 31.");
@@ -26,7 +26,7 @@ internal readonly struct BlockSize
         return new BlockSize(power);
     }
 
-    public static BlockSize FromSize(ushort size)
+    internal static BlockSize FromSize(ushort size)
     {
         if (BitOperations.PopCount(size) != 1)
             throw new ArgumentOutOfRangeException(nameof(size), size, "Size must be a power of two.");
@@ -43,19 +43,19 @@ internal readonly struct BlockSize
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ulong RoundUpToNearestBlock(ulong value) => (value & Mask) == 0 ? value : RoundDownToNearestBlock(value + Size);
+    internal ulong RoundUpToNearestBlock(ulong value) => (value & Mask) == 0 ? value : RoundDownToNearestBlock(value + Size);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ulong RoundUpToNearestBlockMinimumOne(ulong value) => value == 0 ? Size : RoundUpToNearestBlock(value);
+    internal ulong RoundUpToNearestBlockMinimumOne(ulong value) => value == 0 ? Size : RoundUpToNearestBlock(value);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ulong RoundDownToNearestBlock(ulong value) => value & ~Mask;
+    internal ulong RoundDownToNearestBlock(ulong value) => value & ~Mask;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ulong RoundDownToNearestBlockMinimumOne(ulong value) => value <= Size ? Size : RoundDownToNearestBlock(value);
+    internal ulong RoundDownToNearestBlockMinimumOne(ulong value) => value <= Size ? Size : RoundDownToNearestBlock(value);
 
-    public uint GetBlockCountRoundUp(ulong size) => (uint)(RoundUpToNearestBlock(size) >> Power);
-    public uint GetBlockCountRoundDown(ulong size) => (uint)(RoundDownToNearestBlock(size) >> Power);
+    internal uint GetBlockCountRoundUp(ulong size) => (uint)(RoundUpToNearestBlock(size) >> Power);
+    internal uint GetBlockCountRoundDown(ulong size) => (uint)(RoundDownToNearestBlock(size) >> Power);
 
-    public bool IsAligned(ulong size) => (size & Mask) == 0;
+    internal bool IsAligned(ulong size) => (size & Mask) == 0;
 }

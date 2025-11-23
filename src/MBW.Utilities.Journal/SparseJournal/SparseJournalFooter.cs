@@ -9,19 +9,19 @@ internal struct SparseJournalFooter : IStructWithMagic<ulong>
     /// <summary>
     /// "SPRS_END"
     /// </summary>
-    public const ulong ExpectedMagic = 0x535052535F454E44;
-    
+    internal const ulong ExpectedMagic = 0x535052535F454E44;
+
     public static int StructSize { get; } = Marshal.SizeOf(typeof(SparseJournalFooter));
 
-    public required ulong Magic;
-    public required ulong HeaderNonce;
-    public required long FinalLength;
+    internal required ulong Magic;
+    internal required ulong HeaderNonce;
+    internal required long FinalLength;
     /// <summary>
     /// Size of individual chunks, in a power of 2. The size is `pow(BlockSize, 2)`
     /// </summary>
-    public required byte BlockSize;
-    public required uint BitmapLengthUlongs;
-    public required ulong StartOfBitmap;
+    internal required byte BlockSize;
+    internal required uint BitmapLengthUlongs;
+    internal required ulong StartOfBitmap;
     
     ulong IStructWithMagic<ulong>.Magic => Magic;
 }

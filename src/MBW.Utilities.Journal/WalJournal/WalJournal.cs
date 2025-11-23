@@ -9,7 +9,7 @@ using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.WalJournal;
 
-internal sealed class WalJournal : IJournal
+public sealed class WalJournal : IJournal
 {
     private readonly Stream _origin;
     private readonly Stream _journal;
@@ -20,7 +20,7 @@ internal sealed class WalJournal : IJournal
     private uint _journalWrittenSegments;
     private ushort _journalMaxSegmentDataLength;
 
-    public WalJournal(Stream origin, Stream journal, JournalFileHeader header)
+    internal WalJournal(Stream origin, Stream journal, JournalFileHeader header)
     {
         _origin = origin;
         _journal = journal;
@@ -28,7 +28,7 @@ internal sealed class WalJournal : IJournal
         _footer = null;
     }
 
-    public WalJournal(Stream origin, Stream journal, JournalFileHeader header, WalJournalFooter footer)
+    internal WalJournal(Stream origin, Stream journal, JournalFileHeader header, WalJournalFooter footer)
     {
         _origin = origin;
         _journal = journal;

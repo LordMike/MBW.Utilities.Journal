@@ -5,11 +5,10 @@ using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Extensions;
 using MBW.Utilities.Journal.Helpers;
 using MBW.Utilities.Journal.Structures;
-using Microsoft.Win32.SafeHandles;
 
 namespace MBW.Utilities.Journal.SparseJournal;
 
-internal sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactory
+public sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactory
 {
     private readonly BlockSize _blockSize = BlockSize.FromPowerOfTwo(blockSize);
 
@@ -23,7 +22,7 @@ internal sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactor
 
         JournalFileHeader header = new JournalFileHeader
         {
-            Magic = JournalFileConstants.HeaderMagic,
+            Magic = JournalFileHeader.ExpectedMagic,
             Nonce = unchecked((ulong)Random.Shared.NextInt64()),
             Strategy = JournalStrategy.SparseFile,
             Flags = JournalHeaderFlags.None
@@ -35,9 +34,9 @@ internal sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactor
 
     private static unsafe void TryMakeStreamSparse(Stream journal)
     {
-        if (journal is not FileStream asFileStream || !OperatingSystem.IsWindowsVersionAtLeast(5, 1, 2600)) 
+        if (journal is not FileStream asFileStream || !OperatingSystem.IsWindowsVersionAtLeast(5, 1, 2600))
             return;
-        
+
         int bytesReturned = 0;
         bool result;
         result = Windows.Win32.PInvoke.DeviceIoControl(
@@ -55,10 +54,10 @@ internal sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactor
 
     public IJournal Open(Stream origin, Stream journal)
     {
-        if (!JournaledStreamHelpers.TryRead(journal, JournalFileConstants.HeaderMagic, out JournalFileHeader header))
+        if (!JournaledStreamHelpers.TryRead(journal, JournalFileHeader.ExpectedMagic, out JournalFileHeader header))
             throw new InvalidOperationException();
 
-        if (header.Magic != JournalFileConstants.HeaderMagic)
+        if (header.Magic != JournalFileHeader.ExpectedMagic)
             throw new JournalCorruptedException("Journal header was corrupted", false);
 
         if ((header.Flags & JournalHeaderFlags.Committed) == 0)

@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using MBW.Utilities.Journal.Abstracts;
-using MBW.Utilities.Journal.SparseJournal;
 
 namespace MBW.Utilities.Journal;
 
@@ -31,13 +30,5 @@ internal sealed class FileBasedJournalStreamFactory(string file) : IJournalStrea
             stream = null;
             return false;
         }
-    }
-
-    public Stream OpenOrCreate(string identifier)
-    {
-        FileStream fsStream = File.Open(GetFileName(identifier), FileMode.OpenOrCreate, FileAccess.ReadWrite,
-            FileShare.Read | FileShare.Delete);
-
-        return fsStream;
     }
 }

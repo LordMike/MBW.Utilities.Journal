@@ -3,7 +3,12 @@
 namespace MBW.Utilities.Journal.Exceptions;
 
 [SuppressMessage("Roslynator", "RCS1194:Implement exception constructors")]
-public sealed class JournalCorruptedException(string message, bool originalFileHasBeenAltered) : Exception(message)
+public sealed class JournalCorruptedException : Exception
 {
-    public bool OriginalFileHasBeenAltered { get; } = originalFileHasBeenAltered;
+    internal JournalCorruptedException(string message, bool originalFileHasBeenAltered) : base(message)
+    {
+        OriginalFileHasBeenAltered = originalFileHasBeenAltered;
+    }
+
+    public bool OriginalFileHasBeenAltered { get; }
 }

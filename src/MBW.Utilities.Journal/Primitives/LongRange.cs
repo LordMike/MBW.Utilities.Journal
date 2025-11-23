@@ -5,10 +5,10 @@ namespace MBW.Utilities.Journal.Primitives;
 [DebuggerDisplay("Range {Start} to {End}, length {Length}")]
 internal readonly struct LongRange(long start, uint length) : IEquatable<LongRange>, IComparable<LongRange>
 {
-    public readonly long Start = start;
-    public readonly uint Length = length;
+    internal readonly long Start = start;
+    internal readonly uint Length = length;
 
-    public long End => Start + Length;
+    internal long End => Start + Length;
 
     // Equality operators
     public override bool Equals(object? obj) => obj is LongRange range && Equals(range);
@@ -30,12 +30,12 @@ internal readonly struct LongRange(long start, uint length) : IEquatable<LongRan
     public static bool operator >=(LongRange left, LongRange right) => left.CompareTo(right) >= 0;
 
     // Utility methods
-    public bool Overlaps(LongRange other) => Start < other.End && other.Start < End;
-    public bool Contains(long position) => position >= Start && position < End;
-    public bool Contains(LongRange other) => Start <= other.Start && End >= other.End;
+    internal bool Overlaps(LongRange other) => Start < other.End && other.Start < End;
+    internal bool Contains(long position) => position >= Start && position < End;
+    internal bool Contains(LongRange other) => Start <= other.Start && End >= other.End;
 
     // New method to calculate the intersection of two ranges
-    public LongRange Intersection(LongRange other)
+    internal LongRange Intersection(LongRange other)
     {
         // Calculate the maximum start position
         long maxStart = Math.Max(Start, other.Start);

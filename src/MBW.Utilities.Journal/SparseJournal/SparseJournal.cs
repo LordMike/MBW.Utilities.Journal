@@ -7,7 +7,7 @@ using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.SparseJournal;
 
-internal sealed class SparseJournal : IJournal
+public sealed class SparseJournal : IJournal
 {
     private readonly Stream _origin;
     private readonly Stream _journal;
@@ -16,7 +16,7 @@ internal sealed class SparseJournal : IJournal
     private readonly List<ulong> _sparseBitmap;
     private SparseJournalFooter? _footer;
 
-    public SparseJournal(Stream origin, Stream journal, BlockSize blockSize, JournalFileHeader header)
+    internal SparseJournal(Stream origin, Stream journal, BlockSize blockSize, JournalFileHeader header)
     {
         _origin = origin;
         _journal = journal;
@@ -26,7 +26,7 @@ internal sealed class SparseJournal : IJournal
         _sparseBitmap = [];
     }
 
-    public SparseJournal(Stream origin, Stream journal, BlockSize blockSize, JournalFileHeader header,
+    internal SparseJournal(Stream origin, Stream journal, BlockSize blockSize, JournalFileHeader header,
         SparseJournalFooter footer, List<ulong> bitmap)
     {
         _origin = origin;

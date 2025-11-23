@@ -73,7 +73,7 @@ public sealed class JournaledStream : Stream
 
             // Update header
             _journalStream.Seek(0, SeekOrigin.Begin);
-            if (!JournaledStreamHelpers.TryRead(_journalStream, JournalFileConstants.HeaderMagic,
+            if (!JournaledStreamHelpers.TryRead(_journalStream, JournalFileHeader.ExpectedMagic,
                     out JournalFileHeader header))
                 throw new InvalidOperationException();
 
@@ -181,7 +181,6 @@ public sealed class JournaledStream : Stream
     /// Flushes any buffered journal data. Does not flush the origin stream.
     /// </summary>
     public override void Flush() => _journal?.Flush();
-
 
     /// <summary>
     /// Adjusts the virtual length of the stream. Extending beyond the origin forces the journal to open.

@@ -7,7 +7,7 @@ using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.WalJournal;
 
-internal sealed class WalJournalFactory : IJournalFactory
+public sealed class WalJournalFactory : IJournalFactory
 {
     public IJournal Create(Stream origin, Stream journal)
     {
@@ -15,7 +15,7 @@ internal sealed class WalJournalFactory : IJournalFactory
 
         JournalFileHeader header = new JournalFileHeader
         {
-            Magic = JournalFileConstants.HeaderMagic,
+            Magic = JournalFileHeader.ExpectedMagic,
             Nonce = unchecked((ulong)Random.Shared.NextInt64()),
             Strategy = JournalStrategy.WalJournalFile,
             Flags = JournalHeaderFlags.None
@@ -27,10 +27,10 @@ internal sealed class WalJournalFactory : IJournalFactory
 
     public IJournal Open(Stream origin, Stream journal)
     {
-        if (!JournaledStreamHelpers.TryRead(journal, JournalFileConstants.HeaderMagic, out JournalFileHeader header))
+        if (!JournaledStreamHelpers.TryRead(journal, JournalFileHeader.ExpectedMagic, out JournalFileHeader header))
             throw new InvalidOperationException();
 
-        if (header.Magic != JournalFileConstants.HeaderMagic)
+        if (header.Magic != JournalFileHeader.ExpectedMagic)
             throw new JournalCorruptedException("Journal header was corrupted", false);
 
         if ((header.Flags & JournalHeaderFlags.Committed) == 0)
