@@ -5,6 +5,7 @@ using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Extensions;
 using MBW.Utilities.Journal.Helpers;
 using MBW.Utilities.Journal.Structures;
+using Microsoft.Win32.SafeHandles;
 
 namespace MBW.Utilities.Journal.SparseJournal;
 
@@ -16,6 +17,10 @@ internal sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactor
     {
         Debug.Assert(journal.Length == 0);
 
+        // For Windows, try making this stream a sparse file. If the original stream is not a File, we're still
+        // writing in distinct locations, so if the underlying Stream supports that, we're still "sparse".
+        TryMakeStreamSparse(journal);
+
         JournalFileHeader header = new JournalFileHeader
         {
             Magic = JournalFileConstants.HeaderMagic,
@@ -26,6 +31,26 @@ internal sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactor
         journal.Write(header.AsSpan());
 
         return new SparseJournal(origin, journal, _blockSize, header);
+    }
+
+    private static unsafe void TryMakeStreamSparse(Stream journal)
+    {
+        if (journal is not FileStream asFileStream || !OperatingSystem.IsWindowsVersionAtLeast(5, 1, 2600)) 
+            return;
+        
+        int bytesReturned = 0;
+        bool result;
+        result = Windows.Win32.PInvoke.DeviceIoControl(
+            asFileStream.SafeFileHandle,
+            Windows.Win32.PInvoke.FSCTL_SET_SPARSE,
+            null,
+            0,
+            null,
+            0,
+            (uint*)&bytesReturned,
+            null);
+
+        Debug.Assert(result);
     }
 
     public IJournal Open(Stream origin, Stream journal)
@@ -52,11 +77,11 @@ internal sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactor
         journal.Seek((long)footer.StartOfBitmap, SeekOrigin.Begin);
 
         List<ulong> bitmap = new List<ulong>((int)footer.BitmapLengthUlongs);
-        
+
         // Allocate the N ulongs - TODO, find a better way than this
         for (int i = 0; i < footer.BitmapLengthUlongs; i++)
             bitmap.Add(0);
-        
+
         Span<byte> bitmapBytes = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(bitmap));
         journal.ReadExactly(bitmapBytes);
 

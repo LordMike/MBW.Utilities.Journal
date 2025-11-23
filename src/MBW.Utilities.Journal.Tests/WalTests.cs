@@ -12,7 +12,8 @@ public class WalTests : TestsBase
     {
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream =
+                await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             const string data = "ABCDEF";
             journaledStream.WriteStr(data);
@@ -33,7 +34,8 @@ public class WalTests : TestsBase
     {
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream =
+                await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             Assert.Throws<ArgumentOutOfRangeException>(() => journaledStream.Position = -1);
         });
@@ -50,7 +52,8 @@ public class WalTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream1 = await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream1 =
+                await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream1.WriteStr("Corrupt");
             Assert.Equal(expectedTransacted, journaledStream1.ReadFullStr().AsSpan());
@@ -63,7 +66,8 @@ public class WalTests : TestsBase
         Assert.Equal("Clean", TestFile.ReadFullStr());
 
         // Corrupt journal between header & footer
-        var journalFile = JournalFileProvider.OpenOrCreate(string.Empty);
+        if (!JournalFileProvider.TryOpen(string.Empty, true, out Stream? journalFile))
+            throw new InvalidOperationException();
 
         byte[] buffer = new byte[journalFile.Length - JournalFileHeader.StructSize - WalJournalFooter.StructSize];
         Random rng = new Random(42);
@@ -75,7 +79,8 @@ public class WalTests : TestsBase
         // Verify the journal is detected as not being valid (corrupt data)
         JournalCorruptedException ex = await RunScenarioAsync<JournalCorruptedException>(async () =>
         {
-            using JournaledStream journaledStream = await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
+            using JournaledStream journaledStream =
+                await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
         });
 
         Assert.True(ex.OriginalFileHasBeenAltered);

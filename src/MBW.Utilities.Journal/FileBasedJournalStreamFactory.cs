@@ -21,7 +21,6 @@ internal sealed class FileBasedJournalStreamFactory(string file) : IJournalStrea
         {
             FileStream fsStream = File.Open(GetFileName(identifier), createIfMissing ? FileMode.OpenOrCreate : FileMode.Open, FileAccess.ReadWrite,
                 FileShare.Read | FileShare.Delete);
-            SparseStreamHelper.MakeStreamSparse(fsStream);
 
             stream = fsStream;
 
@@ -38,7 +37,6 @@ internal sealed class FileBasedJournalStreamFactory(string file) : IJournalStrea
     {
         FileStream fsStream = File.Open(GetFileName(identifier), FileMode.OpenOrCreate, FileAccess.ReadWrite,
             FileShare.Read | FileShare.Delete);
-        SparseStreamHelper.MakeStreamSparse(fsStream);
 
         return fsStream;
     }
