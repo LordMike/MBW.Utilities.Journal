@@ -1,6 +1,6 @@
 ﻿namespace MBW.Utilities.Journal;
 
-public enum JournaledStreamState
+internal enum JournaledStreamState
 {
     Unset,
 

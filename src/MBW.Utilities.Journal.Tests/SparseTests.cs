@@ -26,20 +26,20 @@ public class SparseTests : TestsBase
         byte[] actual = TestFile.ReadFullBytes();
         Assert.Equal(firstBuffer, actual);
 
-        byte[] seconBuffer = new byte[1000];
-        Random.Shared.NextBytes(seconBuffer);
+        byte[] secondBuffer = new byte[1000];
+        Random.Shared.NextBytes(secondBuffer);
 
         await RunScenarioAsync(async () =>
         {
             using JournaledStream journaledStream = await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
 
-            journaledStream.Write(seconBuffer);
+            journaledStream.Write(secondBuffer);
             await journaledStream.Commit();
         });
 
-        byte[] expected = new byte[Math.Max(firstBuffer.Length, seconBuffer.Length)];
+        byte[] expected = new byte[Math.Max(firstBuffer.Length, secondBuffer.Length)];
         Array.Copy(firstBuffer, 0, expected, 0, firstBuffer.Length);
-        Array.Copy(seconBuffer, 0, expected, 0, seconBuffer.Length);
+        Array.Copy(secondBuffer, 0, expected, 0, secondBuffer.Length);
 
         actual = TestFile.ReadFullBytes();
         Assert.Equal(expected, actual);
