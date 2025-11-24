@@ -9,7 +9,7 @@ using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.WalJournal;
 
-public sealed class WalJournal : IJournal
+internal sealed class WalJournal : IJournal
 {
     private readonly Stream _origin;
     private readonly Stream _journal;

@@ -7,7 +7,7 @@ using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.SparseJournal;
 
-public sealed class SparseJournal : IJournal
+internal sealed class SparseJournal : IJournal
 {
     private readonly Stream _origin;
     private readonly Stream _journal;
