@@ -129,13 +129,14 @@ public static class JournaledStreamFactory
     /// </summary>
     /// <param name="origin">Underlying stream to be journaled.</param>
     /// <param name="journalFile">A file path to the journal, usually for files, this could be FILENAME.jrnl.</param>
+    /// <param name="blockSize">The block size to use for aligned writes. All writes must be aligned internally. Smaller block sizes favor smaller edits, while larger are more suited for large edits. Block size is expressed in a power of two, like 12 for 1024 bytes.</param>
     /// <param name="openMode">Controls whether to apply committed journals or discard uncommitted ones when present.</param>
     /// <returns>A journaled stream, configured with the Sparse file strategy</returns>
     /// <exception cref="JournalCorruptedException">Thrown when an uncommitted or corrupt journal is present and the open mode does not allow discarding.</exception>
     /// <exception cref="JournalCommittedButNotAppliedException">Thrown when a committed journal is present and the open mode does not allow applying it.</exception>
-    public static Task<JournaledStream> CreateSparseJournal(Stream origin, string journalFile,
+    public static Task<JournaledStream> CreateSparseJournal(Stream origin, string journalFile, byte blockSize = 12,
         JournalOpenMode openMode = JournalOpenMode.Default) =>
-        CreateSparseJournal(origin, new FileBasedJournalStreamFactory(journalFile), openMode);
+        CreateSparseJournal(origin, new FileBasedJournalStreamFactory(journalFile), blockSize, openMode);
 
     /// <summary>
     /// <inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,MBW.Utilities.Journal.JournalOpenMode)"/>

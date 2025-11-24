@@ -8,10 +8,19 @@ using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.SparseJournal;
 
-public sealed class SparseJournalFactory(byte blockSize = 12)
-    : JournalFactoryBase((byte)JournalImplementation.SparseJournal)
+public sealed class SparseJournalFactory : JournalFactoryBase
 {
-    private readonly BlockSize _blockSize = BlockSize.FromPowerOfTwo(blockSize);
+    private readonly BlockSize _blockSize;
+
+    public SparseJournalFactory(byte blockSize = 12) : base((byte)JournalImplementation.SparseJournal)
+    {
+        // The minimum size we allow, is 5 (2^5 = 32 bytes), as this is larger than our JournalFileHeader
+        // I don't know what a max should be, we will potentially use a few times 2^blockSize memory, so it will likely fail with OOMs if the blockSize is too high
+        if (blockSize < 5)
+            throw new ArgumentOutOfRangeException(nameof(blockSize), "The blockSize must be greater than or equal to 5.");
+        
+        _blockSize = BlockSize.FromPowerOfTwo(blockSize);
+    }
 
     protected override IJournal Create(Stream origin, Stream journal, JournalFileHeader header)
     {

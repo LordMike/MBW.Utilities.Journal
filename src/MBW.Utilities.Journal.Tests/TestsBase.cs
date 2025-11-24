@@ -4,22 +4,14 @@ namespace MBW.Utilities.Journal.Tests;
 
 public abstract class TestsBase
 {
-    protected TestStream TestFile { get; }
-    protected MemoryJournalStreamFactory JournalFileProvider { get; }
-
-    protected TestsBase()
-    {
-        TestFile = new TestStream();
-        JournalFileProvider = new MemoryJournalStreamFactory();
-    }
+    protected MemoryStream TestFile { get; } = new();
+    protected MemoryJournalStreamFactory JournalFileProvider { get; } = new();
 
     private void ResetFileOffsets()
     {
         TestFile.Seek(0, SeekOrigin.Begin);
-        foreach ((string? _, var testStream) in JournalFileProvider.Streams)
-        {
+        foreach ((string? _, var testStream) in JournalFileProvider.Streams) 
             testStream.Seek(0, SeekOrigin.Begin);
-        }
     }
 
     protected Task RunScenarioAsync(Func<Task> @delegate)
