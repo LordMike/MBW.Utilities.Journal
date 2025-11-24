@@ -14,11 +14,10 @@ MBW.Utilities.Journal.Abstracts.IJournalStreamFactory
 MBW.Utilities.Journal.Abstracts.IJournalStreamFactory.Delete(string! identifier) -> void
 MBW.Utilities.Journal.Abstracts.IJournalStreamFactory.Exists(string! identifier) -> bool
 MBW.Utilities.Journal.Abstracts.IJournalStreamFactory.TryOpen(string! identifier, bool createIfMissing, out System.IO.Stream? stream) -> bool
-MBW.Utilities.Journal.Abstracts.IStructWithMagic
-MBW.Utilities.Journal.Abstracts.IStructWithMagic.StructSize.get -> int
 MBW.Utilities.Journal.Abstracts.IStructWithMagic<TMagic>
 MBW.Utilities.Journal.Abstracts.IStructWithMagic<TMagic>.ExpectedMagic.get -> TMagic
 MBW.Utilities.Journal.Abstracts.IStructWithMagic<TMagic>.Magic.get -> TMagic
+MBW.Utilities.Journal.Abstracts.IStructWithMagic<TMagic>.StructSize.get -> int
 MBW.Utilities.Journal.Abstracts.JournalFactoryBase
 MBW.Utilities.Journal.Abstracts.JournalFactoryBase.Create(System.IO.Stream! origin, System.IO.Stream! journal) -> MBW.Utilities.Journal.Abstracts.IJournal!
 MBW.Utilities.Journal.Abstracts.JournalFactoryBase.JournalFactoryBase(byte implementationId) -> void

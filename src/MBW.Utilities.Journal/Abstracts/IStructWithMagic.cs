@@ -2,14 +2,15 @@ using System.Numerics;
 
 namespace MBW.Utilities.Journal.Abstracts;
 
-public interface IStructWithMagic<out TMagic> : IStructWithMagic where TMagic : INumber<TMagic>
+/// <summary>
+/// Adds info the struct, which helps readers know its size and a magic string that can be used to verify the struct read is of the correct type
+/// </summary>
+/// <typeparam name="TMagic">The magic to use. Ensure this is set when writing the struct.</typeparam>
+public interface IStructWithMagic<out TMagic> where TMagic : INumber<TMagic>
 {
+    static abstract int StructSize { get; }
+    
     TMagic Magic { get; }
 
     static abstract TMagic ExpectedMagic { get; }
-}
-
-public interface IStructWithMagic
-{
-    static abstract int StructSize { get; }
 }
