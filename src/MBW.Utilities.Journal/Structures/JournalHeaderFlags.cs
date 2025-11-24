@@ -1,7 +1,7 @@
 namespace MBW.Utilities.Journal.Structures;
 
 [Flags]
-internal enum JournalHeaderFlags : byte
+public enum JournalHeaderFlags : byte
 {
     None,
 
