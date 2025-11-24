@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using MBW.Utilities.Journal.Abstracts;
 using MBW.Utilities.Journal.Extensions;
-using MBW.Utilities.Journal.Helpers;
 using MBW.Utilities.Journal.Primitives;
 using MBW.Utilities.Journal.Structures;
 

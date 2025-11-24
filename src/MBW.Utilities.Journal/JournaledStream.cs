@@ -75,7 +75,7 @@ public sealed class JournaledStream : Stream
             _journalStream.Seek(0, SeekOrigin.Begin);
             if (!JournaledStreamHelpers.TryRead(_journalStream, JournalFileHeader.ExpectedMagic,
                     out JournalFileHeader header))
-                throw new InvalidOperationException();
+                throw new JournalCorruptedException("Updating the header on the journal was not possible", false);
 
             header.Flags |= JournalHeaderFlags.Committed;
             _journalStream.Seek(0, SeekOrigin.Begin);
@@ -223,7 +223,8 @@ public sealed class JournaledStream : Stream
             throw new ArgumentOutOfRangeException(nameof(offset),
                 $"Desired offset, {offset} from {origin} placed the offset at {newOffset} which was out of range");
         if (newOffset > _virtualLength && _state == JournaledStreamState.JournalFinalized)
-            throw new JournalCommittedButNotAppliedException("Cannot write to a committed but not yet applied journal. Call Commit() first to complete the journal, before writing again");
+            throw new JournalCommittedButNotAppliedException(
+                "Cannot write to a committed but not yet applied journal. Call Commit() first to complete the journal, before writing again");
 
         // If we're outside the origin, we're in Write-territory
         if (newOffset > _origin.Length)

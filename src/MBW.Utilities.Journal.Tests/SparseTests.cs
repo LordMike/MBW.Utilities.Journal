@@ -1,5 +1,4 @@
-﻿using MBW.Utilities.Journal.Helpers;
-using MBW.Utilities.Journal.Primitives;
+﻿using MBW.Utilities.Journal.Primitives;
 using MBW.Utilities.Journal.Tests.Helpers;
 
 namespace MBW.Utilities.Journal.Tests;
@@ -18,7 +17,7 @@ public class SparseTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
+            await using JournaledStream journaledStream = await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
 
             journaledStream.Write(firstBuffer);
             await journaledStream.Commit();
@@ -32,7 +31,7 @@ public class SparseTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
+            await using JournaledStream journaledStream = await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
 
             journaledStream.Write(secondBuffer);
             await journaledStream.Commit();
@@ -58,7 +57,7 @@ public class SparseTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
+            await using JournaledStream journaledStream = await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
 
             // Write in smaller random increments
             Span<byte> remaining = expected.AsSpan();

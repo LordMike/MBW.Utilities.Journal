@@ -27,7 +27,7 @@ public sealed class SparseJournalFactory(byte blockSize = 12)
         journal.Seek(-SparseJournalFooter.StructSize, SeekOrigin.End);
         if (!JournaledStreamHelpers.TryRead(journal, SparseJournalFooter.ExpectedMagic,
                 out SparseJournalFooter footer))
-            throw new InvalidOperationException();
+            throw new JournalCorruptedException("The journal, which should be committed and complete, did not have the required footer. It is likely corrupt.", false);
 
         if (header.Nonce != footer.HeaderNonce)
             throw new JournalCorruptedException("Journal header was corrupted, footer did not match headers info",

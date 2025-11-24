@@ -30,7 +30,7 @@ public abstract class JournalFactoryBase(byte implementationId) : IJournalFactor
     public IJournal Open(Stream origin, Stream journal)
     {
         if (!JournaledStreamHelpers.TryRead(journal, JournalFileHeader.ExpectedMagic, out JournalFileHeader header))
-            throw new InvalidOperationException();
+            throw new JournalCorruptedException("The existing journal was not identified as a valid journal", false);
 
         if (header.Magic != JournalFileHeader.ExpectedMagic)
             throw new JournalCorruptedException("Journal header was corrupted", false);

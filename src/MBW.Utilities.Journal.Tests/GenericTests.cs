@@ -31,7 +31,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
 
@@ -58,7 +58,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Commit without writing
             await journaledStream.Commit();
@@ -77,7 +77,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Position at the end of the current data
             journaledStream.Seek(0, SeekOrigin.End);
@@ -105,7 +105,7 @@ public class GenericTests : TestsBase
     {
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Write data at the start
             journaledStream.WriteStr("0123456789");
@@ -155,7 +155,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Attempt to read at EOF
             journaledStream.Seek(0, SeekOrigin.End); // Move to the end of the data
@@ -193,7 +193,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream1 = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream1 = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream1.WriteStr("Corrupt");
             Assert.Equal(expectedTransacted, journaledStream1.ReadFullStr().AsSpan());
@@ -217,13 +217,13 @@ public class GenericTests : TestsBase
         // Verify the journal is detected as not being valid (missing header)
         await RunScenarioAsync<JournalCorruptedException>(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
         });
 
         // The journal must not be removed. The user must figure out what to do
         await RunScenarioAsync<JournalCorruptedException>(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
         });
 
         // Verify that the original data is still intact
@@ -242,7 +242,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream1 = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream1 = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream1.WriteStr("HeldBack");
             Assert.Equal(expectedTransacted, journaledStream1.ReadFullStr().AsSpan());
@@ -259,7 +259,7 @@ public class GenericTests : TestsBase
         await RunScenarioAsync(async () =>
         {
             // This should auto-apply the committed stream
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Original & transacted file should see "HeldBack"
             // The journal should have been replayed
@@ -281,7 +281,7 @@ public class GenericTests : TestsBase
         // A journal is made, but is not committed
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.WriteStr("NotSeen");
 
@@ -298,7 +298,7 @@ public class GenericTests : TestsBase
         // Once reopened, the journal should be discarded
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             Assert.Equal("Initially", journaledStream.ReadFullStr());
             Assert.False(JournalFileProvider.HasAnyJournal);
@@ -316,7 +316,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
 
@@ -343,7 +343,7 @@ public class GenericTests : TestsBase
     {
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Initial commit
             journaledStream.WriteStr("Alpha");
@@ -381,7 +381,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
             journaledStream.WriteStr("Delayed");
@@ -390,7 +390,7 @@ public class GenericTests : TestsBase
 
             await journaledStream.Commit(applyImmediately: false);
 
-            Assert.Throws<JournalCommittedButNotAppliedException>(() => journaledStream.WriteStr("Again"));
+            Assert.Throws<JournalInInvalidStateException>(() => journaledStream.WriteStr("Again"));
 
             Assert.Equal("Original", TestFile.ReadFullStr());
             Assert.True(JournalFileProvider.HasAnyJournal);
@@ -408,7 +408,7 @@ public class GenericTests : TestsBase
     {
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.WriteStr("Begin");
             Assert.Equal(5, journaledStream.Length);
@@ -430,7 +430,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(3, SeekOrigin.Begin);
             journaledStream.WriteStr("u");
@@ -444,7 +444,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.Seek(0, SeekOrigin.End);
             journaledStream.WriteStr("PostStuff");
@@ -464,7 +464,7 @@ public class GenericTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             journaledStream.SetLength(8);
 

@@ -11,10 +11,10 @@ public class JournaledStreamExamples
         try
         {
             // Create a file stream to work with
-            using (FileStream fileStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
+            await using (FileStream fileStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
             {
                 // Wrap the file stream in a JournaledStream. This allows us to read and write to the stream without affecting the underlying file.
-                using (JournaledStream journalStream = await JournaledStreamFactory.CreateWalJournal(fileStream, journalPath))
+                await using (JournaledStream journalStream = await JournaledStreamFactory.CreateWalJournal(fileStream, journalPath))
                 {
                     // Write data to the JournaledStream
                     // Note! Do not use the original FileStream directly, as this bypasses the Journal
@@ -32,11 +32,11 @@ public class JournaledStreamExamples
             // At this point, the data has been written to the file and committed.
 
             // At a later point, we can reopen the file and read the data using JournaledStream
-            using (FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            await using (FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
             {
                 // Even though we will not write to the file, we still need to use the JournaledStream. This ensures
                 // that if our write was partial, we will replay the journal again to ensure it has been fully written.
-                using (JournaledStream journalStream = await JournaledStreamFactory.CreateWalJournal(fileStream, journalPath))
+                await using (JournaledStream journalStream = await JournaledStreamFactory.CreateWalJournal(fileStream, journalPath))
                 {
                     // Read the data back from the JournaledStream
                     byte[] readBuffer = new byte[1024];

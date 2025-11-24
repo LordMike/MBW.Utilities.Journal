@@ -12,7 +12,7 @@ public class JournalOpenModeTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream writer =
+            await using JournaledStream writer =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.ApplyCommittedJournals);
 
             writer.WriteStr("Pending");
@@ -24,7 +24,7 @@ public class JournalOpenModeTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream reader =
+            await using JournaledStream reader =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.ApplyCommittedJournals);
 
             Assert.Equal("Pending", reader.ReadFullStr());
@@ -42,7 +42,7 @@ public class JournalOpenModeTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream writer =
+            await using JournaledStream writer =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.ApplyCommittedJournals);
 
             writer.WriteStr("Pending");
@@ -51,7 +51,7 @@ public class JournalOpenModeTests : TestsBase
 
         JournalCommittedButNotAppliedException ex = await RunScenarioAsync<JournalCommittedButNotAppliedException>(async () =>
         {
-            using JournaledStream _ =
+            await using JournaledStream _ =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.None);
         });
 
@@ -67,7 +67,7 @@ public class JournalOpenModeTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream writer =
+            await using JournaledStream writer =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.ApplyCommittedJournals);
 
             writer.WriteStr("Uncommitted");
@@ -78,7 +78,7 @@ public class JournalOpenModeTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream reader =
+            await using JournaledStream reader =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.DiscardUncommittedJournals);
 
             Assert.Equal("Original", reader.ReadFullStr());
@@ -96,7 +96,7 @@ public class JournalOpenModeTests : TestsBase
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream writer =
+            await using JournaledStream writer =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.ApplyCommittedJournals);
 
             writer.WriteStr("Uncommitted");
@@ -105,7 +105,7 @@ public class JournalOpenModeTests : TestsBase
 
         JournalCorruptedException ex = await RunScenarioAsync<JournalCorruptedException>(async () =>
         {
-            using JournaledStream _ =
+            await using JournaledStream _ =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.ApplyCommittedJournals);
         });
 

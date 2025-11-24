@@ -12,7 +12,7 @@ public class WalTests : TestsBase
     {
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream =
+            await using JournaledStream journaledStream =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             const string data = "ABCDEF";
@@ -34,7 +34,7 @@ public class WalTests : TestsBase
     {
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream =
+            await using JournaledStream journaledStream =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             Assert.Throws<ArgumentOutOfRangeException>(() => journaledStream.Position = -1);
@@ -44,19 +44,15 @@ public class WalTests : TestsBase
     [Fact]
     public async Task JournalFileCorruptionTest_PartialCorrupt()
     {
-        char[] expectedTransacted = new char[Math.Max("Clean".Length, "Corrupt".Length)];
-        "Clean".CopyTo(expectedTransacted);
-        "Corrupt".CopyTo(expectedTransacted);
-
         TestFile.WriteStr("Clean");
 
         await RunScenarioAsync(async () =>
         {
-            using JournaledStream journaledStream1 =
+            await using JournaledStream journaledStream1 =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
 
             journaledStream1.WriteStr("Corrupt");
-            Assert.Equal(expectedTransacted, journaledStream1.ReadFullStr().AsSpan());
+            Assert.Equal("Corrupt", journaledStream1.ReadFullStr());
 
             // Simulate crash by snapshotting journal mid-commit
             await journaledStream1.Commit(applyImmediately: false);
@@ -79,7 +75,7 @@ public class WalTests : TestsBase
         // Verify the journal is detected as not being valid (corrupt data)
         JournalCorruptedException ex = await RunScenarioAsync<JournalCorruptedException>(async () =>
         {
-            using JournaledStream journaledStream =
+            await using JournaledStream journaledStream =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
         });
 
