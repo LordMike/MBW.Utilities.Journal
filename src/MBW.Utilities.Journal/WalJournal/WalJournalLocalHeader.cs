@@ -9,7 +9,7 @@ internal struct WalJournalLocalHeader : IStructWithMagic<uint>
     /// <summary>
     /// "SGMT"
     /// </summary>
-    internal const uint ExpectedMagic = 0x53474D54;
+    public static uint ExpectedMagic => 0x53474D54;
 
     public static int StructSize { get; } = Marshal.SizeOf(typeof(WalJournalLocalHeader));
 

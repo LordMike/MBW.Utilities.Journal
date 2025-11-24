@@ -298,7 +298,7 @@ public class GenericTests : TestsBase
         // Once reopened, the journal should be discarded
         await RunScenarioAsync(async () =>
         {
-            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider, JournalOpenMode.DiscardUncommittedJournals);
 
             Assert.Equal("Initially", journaledStream.ReadFullStr());
             Assert.False(JournalFileProvider.HasAnyJournal);

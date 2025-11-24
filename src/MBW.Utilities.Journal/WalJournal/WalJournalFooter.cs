@@ -9,7 +9,7 @@ internal struct WalJournalFooter : IStructWithMagic<ulong>
     /// <summary>
     /// "JRNL_END"
     /// </summary>
-    internal const ulong ExpectedMagic = 0x4A524E4C5F454E44;
+    public static ulong ExpectedMagic => 0x4A524E4C5F454E44;
 
     public static int StructSize { get; } = Marshal.SizeOf(typeof(WalJournalFooter));
 

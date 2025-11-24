@@ -1,5 +1,4 @@
-﻿using MBW.Utilities.Journal;
-using MBW.Utilities.Journal.SampleJournal.Implementation;
+﻿using MBW.Utilities.Journal.SampleJournal.Implementation;
 using Xunit;
 
 namespace MBW.Utilities.Journal.SampleJournal;
@@ -40,33 +39,27 @@ public class CustomJournalTests
                 expectedFinal = new byte[journalStream.Length];
                 await journalStream.ReadExactlyAsync(expectedFinal);
 
-                // Commit the journal, but do not apply it. We want to verify that the original file stays unedited 
+                // Commit the journal, but do not apply it. We want to verify that the original file stays unedited
+                // Usually, a user will call Commit(), which both commits and applies immediately, but for this example, we'll postpone the applying
                 await journalStream.Commit(false);
             }
 
-            // Prove the original has no changes
+            // As we passed false to Commit, the journal will be committed, but not applied to the original
+            // We can now verify that the original is intact
             {
                 var actual = await File.ReadAllBytesAsync(filePath);
                 Assert.Equal(original, actual);
             }
 
-            // Reopen the journal, allow commit to be applied
+            // Opening the file again, with a journal, applies the already committed data
             await using (FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite))
             await using (JournaledStream journalStream = await JournaledStreamFactory.CreateJournal(fileStream,
                              new FileBasedJournalStreamFactory(journalPath), new FullCopyJournalFactory()))
             {
-                // At this point, the committed journal will be applied to the orignal
-                
-                // Confirm the journaled view has our edit
-                journalStream.Seek(0, SeekOrigin.Begin);
-
-                var actual = new byte[journalStream.Length];
-                await journalStream.ReadExactlyAsync(actual);
-
-                Assert.Equal(expectedFinal, actual);
+                // We do not need to do any further work
             }
 
-            // After the journal was applied, confirm our file actually also has the expected content
+            // The journal should now have been applied, so we can verify that our file now holds the edited data
             {
                 var actual = await File.ReadAllBytesAsync(filePath);
                 Assert.Equal(expectedFinal, actual);

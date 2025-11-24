@@ -1,10 +1,13 @@
 using System.Runtime.InteropServices;
 using MBW.Utilities.Journal.Abstracts;
-using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.SampleJournal.Implementation;
 
-internal sealed class FullCopyJournal(Stream origin, Stream journal, JournalFileHeader header, long knownFinalLength) : IJournal
+internal sealed class FullCopyJournal(
+    Stream origin,
+    Stream journal,
+    long originalJournalPosition,
+    long knownFinalLength) : IJournal
 {
     private long _finalLength = knownFinalLength;
 
@@ -28,10 +31,9 @@ internal sealed class FullCopyJournal(Stream origin, Stream journal, JournalFile
     public ValueTask ApplyJournal()
     {
         // Assumes finalize wrote the footer and the journal contains a full copy that should replace the origin.
-        origin.SetLength(_finalLength);
-
-        journal.Seek(JournalFileHeader.StructSize, SeekOrigin.Begin);
+        journal.Seek(originalJournalPosition, SeekOrigin.Begin);
         origin.Seek(0, SeekOrigin.Begin);
+        origin.SetLength(_finalLength);
 
         CopyBytes(journal, origin, _finalLength);
         origin.Flush();
@@ -43,13 +45,13 @@ internal sealed class FullCopyJournal(Stream origin, Stream journal, JournalFile
 
     public ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken cancellationToken)
     {
-        journal.Seek(JournalFileHeader.StructSize + offset, SeekOrigin.Begin);
+        journal.Seek(originalJournalPosition + offset, SeekOrigin.Begin);
         return journal.ReadAsync(buffer, cancellationToken);
     }
 
     public ValueTask WriteAsync(long offset, ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
     {
-        journal.Seek(JournalFileHeader.StructSize + offset, SeekOrigin.Begin);
+        journal.Seek(originalJournalPosition + offset, SeekOrigin.Begin);
         return journal.WriteAsync(buffer, cancellationToken);
     }
 
@@ -72,14 +74,4 @@ internal sealed class FullCopyJournal(Stream origin, Stream journal, JournalFile
             remaining -= read;
         }
     }
-}
-
-[StructLayout(LayoutKind.Sequential, Pack = 1)]
-internal struct FullCopyJournalFooter
-{
-    internal const ulong ExpectedMagic = 0x46434A4C464E4C31; // "FCJLFNL1"
-    internal static int StructSize => Marshal.SizeOf<FullCopyJournalFooter>();
-
-    public ulong Magic;
-    public long FinalLength;
 }

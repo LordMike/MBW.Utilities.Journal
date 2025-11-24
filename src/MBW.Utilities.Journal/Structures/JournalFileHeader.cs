@@ -9,7 +9,7 @@ public struct JournalFileHeader : IStructWithMagic<ulong>
     /// <summary>
     /// "JRNLVER1"
     /// </summary>
-    internal const ulong ExpectedMagic = 0x4A524E4C56455231;
+    public static ulong ExpectedMagic => 0x4A524E4C56455231;
     
     public static int StructSize { get; } = Marshal.SizeOf(typeof(JournalFileHeader));
 

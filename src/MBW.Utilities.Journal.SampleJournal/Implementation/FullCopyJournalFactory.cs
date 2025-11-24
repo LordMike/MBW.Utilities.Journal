@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using MBW.Utilities.Journal.Abstracts;
 using MBW.Utilities.Journal.Structures;
 
@@ -12,22 +11,25 @@ public sealed class FullCopyJournalFactory() : JournalFactoryBase(21)
 {
     protected override IJournal Create(Stream origin, Stream journal, JournalFileHeader header)
     {
-        // Assumes the base class already wrote the header, journal is empty otherwise, and the origin is ready for reading from start.
-        journal.Seek(JournalFileHeader.StructSize, SeekOrigin.Begin);
+        var originalJournalPosition = journal.Position;
+
+        // This method assumes the Journal header has already been written, and that we're at the correct position
+        // Our FullCopy journal begins by copying the entire Origin stream into our journal
         origin.Seek(0, SeekOrigin.Begin);
         origin.CopyTo(journal);
 
-        return new FullCopyJournal(origin, journal, header, origin.Length);
+        // Now the journal stream is ready, future edits will go to the Journal in our FullCopyJournal implementation
+        return new FullCopyJournal(origin, journal, originalJournalPosition, origin.Length);
     }
 
     protected override IJournal Open(Stream origin, Stream journal, JournalFileHeader header)
     {
-        // Assumes the journal exists, is committed, and ends with our footer; no extra validation to keep it small.
-        Span<byte> footerBytes = stackalloc byte[FullCopyJournalFooter.StructSize];
-        journal.Seek(-FullCopyJournalFooter.StructSize, SeekOrigin.End);
-        journal.ReadExactly(footerBytes);
-        FullCopyJournalFooter footer = MemoryMarshal.AsRef<FullCopyJournalFooter>(footerBytes);
+        var originalJournalPosition = journal.Position;
 
-        return new FullCopyJournal(origin, journal, header, footer.FinalLength);
+        // This method assumes the journal exists and is committed
+        // We read the footer, to get the info our FullCopyJournal needs
+        var footer = ReadFooterStruct<FullCopyJournalFooter, ulong>(journal);
+
+        return new FullCopyJournal(origin, journal, originalJournalPosition, footer.FinalLength);
     }
 }

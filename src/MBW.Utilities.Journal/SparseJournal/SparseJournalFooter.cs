@@ -9,7 +9,7 @@ internal struct SparseJournalFooter : IStructWithMagic<ulong>
     /// <summary>
     /// "SPRS_END"
     /// </summary>
-    internal const ulong ExpectedMagic = 0x535052535F454E44;
+    public static ulong ExpectedMagic => 0x535052535F454E44;
 
     public static int StructSize { get; } = Marshal.SizeOf(typeof(SparseJournalFooter));
 

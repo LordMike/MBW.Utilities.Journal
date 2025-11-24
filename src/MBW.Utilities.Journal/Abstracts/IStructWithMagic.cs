@@ -2,12 +2,14 @@ using System.Numerics;
 
 namespace MBW.Utilities.Journal.Abstracts;
 
-internal interface IStructWithMagic<out TMagic> : IStructWithMagic where TMagic : INumber<TMagic>
+public interface IStructWithMagic<out TMagic> : IStructWithMagic where TMagic : INumber<TMagic>
 {
-    internal TMagic Magic { get; }
+    TMagic Magic { get; }
+
+    static abstract TMagic ExpectedMagic { get; }
 }
 
-internal interface IStructWithMagic
+public interface IStructWithMagic
 {
-    internal static abstract int StructSize { get; }
+    static abstract int StructSize { get; }
 }

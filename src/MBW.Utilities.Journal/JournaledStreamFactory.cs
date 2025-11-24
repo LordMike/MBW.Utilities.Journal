@@ -40,6 +40,8 @@ public static class JournaledStreamFactory
         // Handle existing stream
         if ((openMode & JournalOpenMode.ApplyCommittedJournals) != 0)
         {
+            journalStream.Seek(0, SeekOrigin.Begin);
+
             await using (journalStream)
             {
                 IJournal journal = journalFactory.Open(origin, journalStream);
