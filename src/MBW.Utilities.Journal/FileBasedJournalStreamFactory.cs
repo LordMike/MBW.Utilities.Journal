@@ -6,7 +6,7 @@ namespace MBW.Utilities.Journal;
 /// <summary>
 /// A provider for a journal file based on a filesystem file
 /// </summary>
-internal sealed class FileBasedJournalStreamFactory(string file) : IJournalStreamFactory
+public sealed class FileBasedJournalStreamFactory(string file) : IJournalStreamFactory
 {
     private string GetFileName(string identifier) => identifier == string.Empty ? file : file + identifier;
 
