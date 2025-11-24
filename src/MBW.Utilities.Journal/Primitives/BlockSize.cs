@@ -2,7 +2,7 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
-namespace MBW.Utilities.Journal.Helpers;
+namespace MBW.Utilities.Journal.Primitives;
 
 [DebuggerDisplay("BlockSize 2^{Power} => {Size}")]
 internal readonly struct BlockSize

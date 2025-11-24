@@ -4,6 +4,7 @@ using MBW.Utilities.Journal.Abstracts;
 using MBW.Utilities.Journal.Exceptions;
 using MBW.Utilities.Journal.Extensions;
 using MBW.Utilities.Journal.Helpers;
+using MBW.Utilities.Journal.Primitives;
 using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.SparseJournal;

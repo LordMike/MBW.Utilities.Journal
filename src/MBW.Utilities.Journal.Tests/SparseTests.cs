@@ -1,4 +1,5 @@
 ﻿using MBW.Utilities.Journal.Helpers;
+using MBW.Utilities.Journal.Primitives;
 using MBW.Utilities.Journal.Tests.Helpers;
 
 namespace MBW.Utilities.Journal.Tests;
