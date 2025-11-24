@@ -5,9 +5,9 @@ namespace MBW.Utilities.Journal.Tests.Helpers;
 
 public sealed class MemoryJournalStreamFactory : IJournalStreamFactory
 {
-    private readonly Dictionary<string, MemoryStream> _streams = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TestStream> _streams = new(StringComparer.Ordinal);
 
-    public IEnumerable<(string, MemoryStream)> Streams => _streams.Select(s => (s.Key, s.Value));
+    public IEnumerable<(string, TestStream)> Streams => _streams.Select(s => (s.Key, s.Value));
 
     public bool HasAnyJournal => _streams.Count > 0;
 
@@ -22,7 +22,7 @@ public sealed class MemoryJournalStreamFactory : IJournalStreamFactory
     {
         if (_streams.TryGetValue(identifier, out var tmpStream))
         {
-            stream = tmpStream;
+            stream = tmpStream.GetStream();
             stream.Seek(0, SeekOrigin.Begin);
             return true;
         }
@@ -33,9 +33,9 @@ public sealed class MemoryJournalStreamFactory : IJournalStreamFactory
             return false;
         }
 
-        tmpStream = new MemoryStream();
+        tmpStream = new TestStream();
         _streams.Add(identifier, tmpStream);
-        stream = tmpStream;
+        stream = tmpStream.GetStream();
         return true;
     }
 }

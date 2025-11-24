@@ -6,7 +6,8 @@ namespace MBW.Utilities.Journal.Tests;
 
 public class GenericTests : TestsBase
 {
-    public delegate Task<JournaledStream> CreateDelegate(Stream origin, IJournalStreamFactory journalStreamFactory, JournalOpenMode openMode = JournalOpenMode.Default);
+    public delegate Task<JournaledStream> CreateDelegate(Stream origin, IJournalStreamFactory journalStreamFactory,
+        JournalOpenMode openMode = JournalOpenMode.Default);
 
     public static IEnumerable<object[]> GetTestStreams()
     {
@@ -16,8 +17,9 @@ public class GenericTests : TestsBase
 
     private void ApplyToAllJournals(Action<string, Stream> action)
     {
-        foreach ((string? identifier, var journalStream) in JournalFileProvider.Streams)
+        foreach ((string? identifier, var journalStreamWrapper) in JournalFileProvider.Streams)
         {
+            var journalStream = journalStreamWrapper.GetStream();
             journalStream.Seek(0, SeekOrigin.Begin);
             action(identifier, journalStream);
         }
@@ -298,7 +300,8 @@ public class GenericTests : TestsBase
         // Once reopened, the journal should be discarded
         await RunScenarioAsync(async () =>
         {
-            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider, JournalOpenMode.DiscardUncommittedJournals);
+            await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider,
+                JournalOpenMode.DiscardUncommittedJournals);
 
             Assert.Equal("Initially", journaledStream.ReadFullStr());
             Assert.False(JournalFileProvider.HasAnyJournal);
