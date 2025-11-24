@@ -12,6 +12,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SolutionItems", "SolutionItems", "{714E56DB-22AB-49DA-AFA3-91A43076DD1B}"
 	ProjectSection(SolutionItems) = preProject
 		Readme.md = Readme.md
+		Directory.Build.props = Directory.Build.props
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MBW.Utilities.Journal.SampleJournal", "src\MBW.Utilities.Journal.SampleJournal\MBW.Utilities.Journal.SampleJournal.csproj", "{8DFFAF3F-D858-450E-85C9-484A9B1DFC4D}"
