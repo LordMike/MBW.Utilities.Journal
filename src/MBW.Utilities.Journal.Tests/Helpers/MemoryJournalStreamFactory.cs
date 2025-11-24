@@ -38,12 +38,4 @@ public sealed class MemoryJournalStreamFactory : IJournalStreamFactory
         stream = tmpStream;
         return true;
     }
-
-    public Stream OpenOrCreate(string identifier)
-    {
-        if (!TryOpen(identifier, true, out Stream? stream))
-            throw new InvalidOperationException("Unable to open or create in-memory journal stream");
-
-        return stream;
-    }
 }

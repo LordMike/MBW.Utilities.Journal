@@ -28,23 +28,6 @@ internal static class StreamExtensions
         return ref MemoryMarshal.AsRef<T>(buffer);
     }
 
-    internal static int ReadUpTo(this Stream source, Span<byte> buffer)
-    {
-        int totalRead = 0;
-        while (buffer.Length > 0)
-        {
-            int read = source.Read(buffer);
-            totalRead += read;
-
-            if (read <= 0)
-                return totalRead;
-
-            buffer = buffer.Slice(read);
-        }
-
-        return totalRead;
-    }
-    
     internal static async ValueTask<int> ReadUpToAsync(this Stream source, Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
         int totalRead = 0;
