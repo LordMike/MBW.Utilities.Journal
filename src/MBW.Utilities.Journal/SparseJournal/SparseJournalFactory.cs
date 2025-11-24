@@ -13,6 +13,8 @@ public sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactory
 {
     private readonly BlockSize _blockSize = BlockSize.FromPowerOfTwo(blockSize);
 
+    public byte ImplementationId => (byte)JournalImplementation.SparseJournal;
+
     public IJournal Create(Stream origin, Stream journal)
     {
         Debug.Assert(journal.Length == 0);
@@ -25,7 +27,7 @@ public sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactory
         {
             Magic = JournalFileHeader.ExpectedMagic,
             Nonce = unchecked((ulong)Random.Shared.NextInt64()),
-            Strategy = JournalStrategy.SparseFile,
+            ImplementationId = ImplementationId,
             Flags = JournalHeaderFlags.None
         };
         journal.Write(header.AsSpan());
@@ -63,6 +65,9 @@ public sealed class SparseJournalFactory(byte blockSize = 12) : IJournalFactory
 
         if ((header.Flags & JournalHeaderFlags.Committed) == 0)
             throw new JournalCorruptedException("Journal header indicates the journal was not committed", false);
+
+        if (header.ImplementationId != ImplementationId)
+            throw new JournalIncorrectImplementationException(header.ImplementationId, ImplementationId);
 
         journal.Seek(-SparseJournalFooter.StructSize, SeekOrigin.End);
         if (!JournaledStreamHelpers.TryRead(journal, SparseJournalFooter.ExpectedMagic,

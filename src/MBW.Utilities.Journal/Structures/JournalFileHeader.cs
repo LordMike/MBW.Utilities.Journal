@@ -14,7 +14,12 @@ internal struct JournalFileHeader : IStructWithMagic<ulong>
     public static int StructSize { get; } = Marshal.SizeOf(typeof(JournalFileHeader));
 
     internal required ulong Magic;
-    internal required JournalStrategy Strategy;
+    
+    /// <summary>
+    /// The implementation Id, to help detect if we're using the proper Journal implementation.
+    /// This is a byte, to allow for extensions w/o extending this library.
+    /// </summary>
+    internal required byte ImplementationId;
     internal required ulong Nonce;
     internal required JournalHeaderFlags Flags;
 
