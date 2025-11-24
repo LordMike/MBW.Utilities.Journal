@@ -54,6 +54,11 @@ public abstract class JournalFactoryBase(byte implementationId) : IJournalFactor
         return Open(origin, journal, header);
     }
 
+    /// <summary>
+    /// Reads the designated footer from the stream. This method seeks to the end, minus the size of the footer struct.
+    /// </summary>
+    /// <remarks>The structs Magic is validated, an exception is thrown if the struct cannot be read</remarks>
+    /// <exception cref="InvalidOperationException">The struct could not be read from the end of the stream</exception>
     protected TStruct ReadFooterStruct<TStruct, TMagic>(Stream stream) where TStruct : unmanaged, IStructWithMagic<TMagic>
         where TMagic : INumber<TMagic>
     {
@@ -61,11 +66,16 @@ public abstract class JournalFactoryBase(byte implementationId) : IJournalFactor
         return ReadStruct<TStruct, TMagic>(stream);
     }
 
+    /// <summary>
+    /// Reads the designated struct from the stream. Use <see cref="ReadFooterStruct"/> if you want to read a footer.
+    /// </summary>
+    /// <remarks>The structs Magic is validated, an exception is thrown if the struct cannot be read</remarks>
+    /// <exception cref="InvalidOperationException">The struct could not be read from the stream</exception>
     protected TStruct ReadStruct<TStruct, TMagic>(Stream stream) where TStruct : unmanaged, IStructWithMagic<TMagic>
         where TMagic : INumber<TMagic>
     {
         if (!JournaledStreamHelpers.TryRead(stream, TStruct.ExpectedMagic, out TStruct header))
-            throw new InvalidOperationException("Unable to read the " + typeof(TStruct).Name + " struct");
+            throw new InvalidOperationException($"Unable to read the {typeof(TStruct).Name} struct");
 
         return header;
     }
