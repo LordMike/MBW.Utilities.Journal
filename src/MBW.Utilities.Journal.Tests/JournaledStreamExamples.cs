@@ -3,7 +3,7 @@
 public class JournaledStreamExamples
 {
     [Fact]
-    public void DemonstrateJournaledStreamUsage()
+    public async Task DemonstrateJournaledStreamUsage()
     {
         string filePath = Path.GetTempFileName();
         string journalPath = filePath + ".journal";
@@ -11,10 +11,10 @@ public class JournaledStreamExamples
         try
         {
             // Create a file stream to work with
-            using (FileStream fileStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
+            await using (FileStream fileStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
             {
                 // Wrap the file stream in a JournaledStream. This allows us to read and write to the stream without affecting the underlying file.
-                using (JournaledStream journalStream = JournaledStreamFactory.CreateWalJournal(fileStream, journalPath))
+                await using (JournaledStream journalStream = await JournaledStreamFactory.CreateWalJournal(fileStream, journalPath))
                 {
                     // Write data to the JournaledStream
                     // Note! Do not use the original FileStream directly, as this bypasses the Journal
@@ -23,18 +23,20 @@ public class JournaledStreamExamples
 
                     // Commit the transaction, persisting the data to the file
                     // Alternatively, you can also call RollBack() to delete the journal and discard any changes
-                    journalStream.Commit();
+                    await journalStream.Commit();
+                    
+                    // You can also defer the applying of the stream, by calling Commit(false), and later Commit(true). 
                 }
             }
 
             // At this point, the data has been written to the file and committed.
 
             // At a later point, we can reopen the file and read the data using JournaledStream
-            using (FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            await using (FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
             {
                 // Even though we will not write to the file, we still need to use the JournaledStream. This ensures
                 // that if our write was partial, we will replay the journal again to ensure it has been fully written.
-                using (JournaledStream journalStream = JournaledStreamFactory.CreateWalJournal(fileStream, journalPath))
+                await using (JournaledStream journalStream = await JournaledStreamFactory.CreateWalJournal(fileStream, journalPath))
                 {
                     // Read the data back from the JournaledStream
                     byte[] readBuffer = new byte[1024];
@@ -43,10 +45,6 @@ public class JournaledStreamExamples
 
                     Assert.Equal("Hello, Journaled World!", readData);
                 }
-
-                // Alternatively, we can ensure the journal has been applied, by using the utility
-                // After this utility has run, we know that any journal has either been applied fully or removed (if it wasn't committed by the original application)
-                JournaledUtilities.EnsureJournalCommitted(fileStream, journalPath);
             }
         }
         finally

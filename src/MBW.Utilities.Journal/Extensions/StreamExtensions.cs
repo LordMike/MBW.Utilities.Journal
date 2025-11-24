@@ -4,13 +4,13 @@ namespace MBW.Utilities.Journal.Extensions;
 
 internal static class StreamExtensions
 {
-    public static ref T ReadOne<T>(this Stream stream, Span<byte> buffer) where T : unmanaged
+    internal static ref T ReadOne<T>(this Stream stream, Span<byte> buffer) where T : unmanaged
     {
         stream.ReadExactly(buffer);
         return ref MemoryMarshal.AsRef<T>(buffer);
     }
 
-    public static ref T ReadOneIfEnough<T>(this Stream stream, Span<byte> buffer, out bool success) where T : unmanaged
+    internal static ref T ReadOneIfEnough<T>(this Stream stream, Span<byte> buffer, out bool success) where T : unmanaged
     {
         Span<byte> remaining = buffer;
         while (remaining.Length > 0)
@@ -28,12 +28,12 @@ internal static class StreamExtensions
         return ref MemoryMarshal.AsRef<T>(buffer);
     }
 
-    public static int ReadUpTo(this Stream source, Span<byte> buffer)
+    internal static async ValueTask<int> ReadUpToAsync(this Stream source, Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
         int totalRead = 0;
         while (buffer.Length > 0)
         {
-            var read = source.Read(buffer);
+            int read = await source.ReadAsync(buffer, cancellationToken);
             totalRead += read;
 
             if (read <= 0)
