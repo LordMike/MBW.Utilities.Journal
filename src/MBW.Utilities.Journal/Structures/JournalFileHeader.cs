@@ -7,9 +7,9 @@ namespace MBW.Utilities.Journal.Structures;
 public struct JournalFileHeader : IStructWithMagic<ulong>
 { 
     /// <summary>
-    /// "JRNLVER1"
+    /// "JRNLVER2"
     /// </summary>
-    public static ulong ExpectedMagic => 0x315245564C4E524A;
+    public static ulong ExpectedMagic => 0x325245564C4E524A;
     
     public static int StructSize { get; } = Marshal.SizeOf(typeof(JournalFileHeader));
 
