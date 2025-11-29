@@ -80,6 +80,7 @@ public sealed class JournaledStream : Stream
             header.Flags |= JournalHeaderFlags.Committed;
             _journalStream.Seek(0, SeekOrigin.Begin);
             _journalStream.Write(header.AsSpan());
+            await _journalStream.FlushAsync();
 
             _state = JournaledStreamState.JournalFinalized;
         }
