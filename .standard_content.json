@@ -4,7 +4,8 @@
     "repo": "LordMike/MBW.Utilities.Journal",
     "profiles": [
       "standardCI",
-      "standardDotnetBuild",
+      "standardDotnet",
+      "standardDotnetBuildAction",
       "standardNoDeploy"
     ],
     "files": [
@@ -20,6 +21,6 @@
       ".github/workflows/deploy.yml",
       "Directory.Build.props"
     ],
-    "last_updated": "2026-07-26T09:04:55.3240949\u002B00:00"
+    "last_updated": "2026-07-26T20:33:53.0504926\u002B00:00"
   }
 }
