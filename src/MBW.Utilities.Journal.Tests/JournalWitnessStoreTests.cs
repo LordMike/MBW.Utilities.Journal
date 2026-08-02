@@ -77,9 +77,9 @@ public class JournalWitnessStoreTests
 
         Assert.Throws<InvalidDataException>(() => JournalWitnessRecord.Read([1, 2, 3]));
 
-        byte[] oldVersion = record.ToArray();
-        oldVersion[7] = (byte)'1';
-        Assert.Throws<InvalidDataException>(() => JournalWitnessRecord.Read(oldVersion));
+        byte[] unknownVersion = record.ToArray();
+        unknownVersion[7] = (byte)'2';
+        Assert.Throws<InvalidDataException>(() => JournalWitnessRecord.Read(unknownVersion));
 
         byte[] badChecksum = record.ToArray();
         badChecksum[sizeof(ulong)] ^= 0xFF;

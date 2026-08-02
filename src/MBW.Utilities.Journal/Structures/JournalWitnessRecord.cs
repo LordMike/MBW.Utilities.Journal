@@ -5,7 +5,7 @@ namespace MBW.Utilities.Journal.Structures;
 
 internal static class JournalWitnessRecord
 {
-    private const ulong Magic = 0x325449574C4E524A; // "JRNLWIT2"
+    private const ulong Magic = 0x315449574C4E524A; // "JRNLWIT1"
     private const int PreparationKeyOffset = sizeof(ulong);
     private const int ParticipantCountOffset = PreparationKeyOffset + 16;
     private const int ParticipantNoncesOffset = ParticipantCountOffset + sizeof(uint);
