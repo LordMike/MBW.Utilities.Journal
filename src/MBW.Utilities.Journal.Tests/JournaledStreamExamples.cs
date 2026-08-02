@@ -47,7 +47,7 @@ public class JournaledStreamExamples
             journal.Write("durable value"u8);
 
             // Commit records the durable decision but deliberately does not update origin yet.
-            // A caller may use Commit(true) when it wants Commit followed by Apply immediately.
+            // A caller may use CommitAndApply() when it wants Commit followed by Apply immediately.
             await journal.Commit();
             Assert.Equal(0, origin.Length);
         }

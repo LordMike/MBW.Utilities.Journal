@@ -40,8 +40,8 @@ public class CustomJournalTests
                 await journalStream.ReadExactlyAsync(expectedFinal);
 
                 // Commit the journal, but do not apply it. We want to verify that the original file stays unedited
-                // Commit(false) is the compatibility helper for persisting the commit marker without applying.
-                await journalStream.Commit(false);
+                // Commit persists the commit marker without applying it.
+                await journalStream.Commit();
             }
 
             // As we passed false to Commit, the journal will be committed, but not applied to the original

@@ -55,7 +55,7 @@ public class WalTests : TestsBase
             Assert.Equal("Corrupt", journaledStream1.ReadFullStr());
 
             // Simulate crash by snapshotting journal mid-commit
-            await journaledStream1.Commit(applyImmediately: false);
+            await journaledStream1.Commit();
         });
 
         Assert.True(JournalFileProvider.Exists(string.Empty));

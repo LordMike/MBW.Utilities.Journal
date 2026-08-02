@@ -1,19 +1,18 @@
 namespace MBW.Utilities.Journal;
 
 /// <summary>
-/// Convenience operations for committing and optionally applying journaled streams.
+/// Convenience operations for committing and applying journaled streams.
 /// </summary>
 public static class JournaledStreamExtensions
 {
     /// <summary>
-    /// Persists the commit marker and optionally applies the journal immediately.
+    /// Persists the commit marker and applies the journal to the origin.
     /// </summary>
-    public static async Task Commit(this JournaledStream stream, bool applyImmediately)
+    public static async Task CommitAndApply(this JournaledStream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
 
         await stream.Commit();
-        if (applyImmediately)
-            await stream.Apply();
+        await stream.Apply();
     }
 }

@@ -130,7 +130,7 @@ public static class JournaledStreamFactory
     /// await using var file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite);
     /// await using var js = await JournaledStreamFactory.CreateWalJournal(file, path + ".jrnl");
     /// js.Write(Encoding.UTF8.GetBytes("Hello"));
-    /// await js.Commit(true);
+    /// await js.CommitAndApply();
     /// </code>
     /// </summary>
     /// <param name="origin">Underlying stream to be journaled.</param>
@@ -168,7 +168,7 @@ public static class JournaledStreamFactory
     /// await using var file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite);
     /// await using var js = await JournaledStreamFactory.CreateSparseJournal(file, path + ".jrnl");
     /// js.Write(Encoding.UTF8.GetBytes("Hello"));
-    /// await js.Commit(true);
+    /// await js.CommitAndApply();
     /// </code>
     /// </summary>
     /// <param name="origin">Underlying stream to be journaled.</param>

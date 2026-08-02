@@ -16,7 +16,7 @@ public class JournalOpenModeTests : TestsBase
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.ApplyCommittedJournals);
 
             writer.WriteStr("Pending");
-            await writer.Commit(applyImmediately: false);
+            await writer.Commit();
         });
 
         Assert.Equal("Base", TestFile.ReadFullStr());
@@ -46,7 +46,7 @@ public class JournalOpenModeTests : TestsBase
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.ApplyCommittedJournals);
 
             writer.WriteStr("Pending");
-            await writer.Commit(applyImmediately: false);
+            await writer.Commit();
         });
 
         JournalCommittedButNotAppliedException ex = await RunScenarioAsync<JournalCommittedButNotAppliedException>(async () =>

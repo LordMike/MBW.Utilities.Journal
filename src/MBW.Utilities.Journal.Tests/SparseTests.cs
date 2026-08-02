@@ -54,7 +54,7 @@ public class SparseTests : TestsBase
                 await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
 
             journaledStream.Write(firstBuffer);
-            await journaledStream.Commit(true);
+            await journaledStream.CommitAndApply();
         });
 
         byte[] actual = TestFile.ReadFullBytes();
@@ -69,7 +69,7 @@ public class SparseTests : TestsBase
                 await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider, blockSize.Power);
 
             journaledStream.Write(secondBuffer);
-            await journaledStream.Commit(true);
+            await journaledStream.CommitAndApply();
         });
 
         byte[] expected = new byte[Math.Max(firstBuffer.Length, secondBuffer.Length)];
@@ -107,7 +107,7 @@ public class SparseTests : TestsBase
                 journaledStream.Write(buffer);
             }
 
-            await journaledStream.Commit(true);
+            await journaledStream.CommitAndApply();
         });
 
         byte[] actual = TestFile.ReadFullBytes();
