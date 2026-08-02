@@ -16,8 +16,9 @@ public sealed class SparseJournalFactory : JournalFactoryBase
     {
         // The minimum size we allow, is 5 (2^5 = 32 bytes), as this is larger than our JournalFileHeader
         // I don't know what a max should be, we will potentially use a few times 2^blockSize memory, so it will likely fail with OOMs if the blockSize is too high
-        if (blockSize < 5)
-            throw new ArgumentOutOfRangeException(nameof(blockSize), "The blockSize must be greater than or equal to 5.");
+        if (blockSize >= 63 || (1UL << blockSize) < (ulong)JournalFileHeader.StructSize)
+            throw new ArgumentOutOfRangeException(nameof(blockSize),
+                $"The block size must fit the {JournalFileHeader.StructSize}-byte journal header.");
         
         _blockSize = BlockSize.FromPowerOfTwo(blockSize);
     }
@@ -41,6 +42,33 @@ public sealed class SparseJournalFactory : JournalFactoryBase
         if (header.Nonce != footer.HeaderNonce)
             throw new JournalCorruptedException("Journal header was corrupted, footer did not match headers info",
                 false);
+        ulong persistedBlockSize = footer.BlockSize < 63 ? 1UL << footer.BlockSize : 0;
+        ulong journalPayloadEnd = (ulong)(journal.Length - SparseJournalFooter.StructSize);
+        bool invalidBounds = header.FinalLength != footer.FinalLength ||
+                             persistedBlockSize < (ulong)JournalFileHeader.StructSize ||
+                             footer.StartOfBitmap > journalPayloadEnd ||
+                             footer.BitmapLengthUlongs > int.MaxValue;
+
+        if (!invalidBounds && footer.BitmapLengthUlongs == 0)
+        {
+            invalidBounds = footer.StartOfBitmap != (ulong)JournalFileHeader.StructSize;
+        }
+        else if (!invalidBounds)
+        {
+            invalidBounds = footer.StartOfBitmap < persistedBlockSize * 2 ||
+                            footer.StartOfBitmap % persistedBlockSize != 0;
+            if (!invalidBounds)
+            {
+                ulong journalDataBlocks = footer.StartOfBitmap / persistedBlockSize - 1;
+                ulong expectedBitmapLength = (journalDataBlocks + 63) / 64;
+                invalidBounds = expectedBitmapLength != footer.BitmapLengthUlongs;
+            }
+        }
+
+        invalidBounds |= footer.StartOfBitmap + (ulong)footer.BitmapLengthUlongs * sizeof(ulong) !=
+                         journalPayloadEnd;
+        if (invalidBounds)
+            throw new JournalCorruptedException("The sparse journal footer contains invalid bounds", false);
 
         // Read bitmap
         journal.Seek((long)footer.StartOfBitmap, SeekOrigin.Begin);

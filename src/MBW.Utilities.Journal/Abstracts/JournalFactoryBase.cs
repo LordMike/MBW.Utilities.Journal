@@ -28,9 +28,11 @@ public abstract class JournalFactoryBase(byte implementationId) : IJournalFactor
         JournalFileHeader header = new JournalFileHeader
         {
             Magic = JournalFileHeader.ExpectedMagic,
-            Nonce = unchecked((ulong)Random.Shared.NextInt64()),
+            Nonce = JournalNonceGenerator.Next(),
             ImplementationId = implementationId,
-            Flags = JournalHeaderFlags.None
+            Flags = JournalHeaderFlags.None,
+            PreparationKey = Guid.Empty,
+            FinalLength = origin.Length
         };
         journal.Write(header.AsSpan());
 
@@ -45,8 +47,13 @@ public abstract class JournalFactoryBase(byte implementationId) : IJournalFactor
         if (header.Magic != JournalFileHeader.ExpectedMagic)
             throw new JournalCorruptedException("Journal header was corrupted", false);
 
-        if ((header.Flags & JournalHeaderFlags.Committed) == 0)
-            throw new JournalCorruptedException("Journal header indicates the journal was not committed", false);
+        const JournalHeaderFlags knownFlags = JournalHeaderFlags.Prepared | JournalHeaderFlags.Committed;
+        if ((header.Flags & ~knownFlags) != 0 ||
+            (header.Flags & JournalHeaderFlags.Prepared) == 0 ||
+            ((header.Flags & JournalHeaderFlags.Committed) != 0 &&
+             (header.Flags & JournalHeaderFlags.Prepared) == 0) ||
+            header.PreparationKey == Guid.Empty || header.FinalLength < 0)
+            throw new JournalCorruptedException("Journal header contains an invalid finalized state", false);
 
         if (header.ImplementationId != implementationId)
             throw new JournalIncorrectImplementationException(header.ImplementationId, implementationId);

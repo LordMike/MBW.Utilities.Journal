@@ -1,23 +1,26 @@
 ﻿namespace MBW.Utilities.Journal;
 
-internal enum JournaledStreamState
+public enum JournaledStreamState
 {
-    Unset,
-
     /// <summary>
     /// Open, ready for read/write
     /// </summary>
-    Clean,
+    Ready,
 
     /// <summary>
     /// Open, ready for read/write, has changes
     /// </summary>
-    JournalOpened,
+    Dirty,
+
+    /// <summary>
+    /// Finalized with a coordination key. Reads and rollback are allowed, mutations are frozen.
+    /// </summary>
+    Prepared,
 
     /// <summary>
     /// Committed, but not yet applied. Can only read
     /// </summary>
-    JournalFinalized,
+    CommittedButNotApplied,
 
     /// <summary>
     /// The stream is closed, no further action is possible

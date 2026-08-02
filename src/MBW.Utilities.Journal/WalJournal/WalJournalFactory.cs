@@ -21,6 +21,8 @@ public sealed class WalJournalFactory() : JournalFactoryBase((byte)JournalImplem
 
         if (header.Nonce != footer.HeaderNonce)
             throw new JournalCorruptedException("Journal header was corrupted, footer did not match headers info", false);
+        if (header.FinalLength != footer.FinalLength)
+            throw new JournalCorruptedException("Journal header and footer disagree about the final length", false);
 
         return new WalJournal(origin, journal, header, footer);
     }

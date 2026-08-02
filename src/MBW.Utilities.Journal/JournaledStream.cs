@@ -21,6 +21,11 @@ public sealed class JournaledStream : Stream
 
     private long _virtualOffset;
     private long _virtualLength;
+    private Guid? _preparationKey;
+    private ulong? _journalNonce;
+    private bool _journalFinalized;
+    private bool _recoveryOnlyDirty;
+    private bool _allowUnkeyedCommit;
 
     /// <summary>
     /// Creates a journal-enabled stream wrapper over an origin stream using the supplied journal storage and strategy.
@@ -48,53 +53,199 @@ public sealed class JournaledStream : Stream
         if (_journalStreamFactory.Exists(string.Empty))
             throw new InvalidOperationException("Cannot open a journal stream on a stream with a pre-existing Journal");
 
-        _state = JournaledStreamState.Clean;
+        _state = JournaledStreamState.Ready;
+
+        Invariant();
+    }
+
+    internal JournaledStream(Stream origin, IJournalStreamFactory journalStreamFactory,
+        IJournalFactory journalFactory, Stream journalStream, JournalFileHeader header, IJournal? journal)
+    {
+        _origin = origin;
+        _journalStreamFactory = journalStreamFactory;
+        _journalFactory = journalFactory;
+        _journalStream = journalStream;
+        _journal = journal;
+        _journalNonce = header.Nonce;
+        _virtualOffset = 0;
+
+        if ((header.Flags & JournalHeaderFlags.Prepared) == 0)
+        {
+            _state = JournaledStreamState.Dirty;
+            _virtualLength = origin.Length;
+            _recoveryOnlyDirty = true;
+        }
+        else
+        {
+            _state = (header.Flags & JournalHeaderFlags.Committed) != 0
+                ? JournaledStreamState.CommittedButNotApplied
+                : JournaledStreamState.Prepared;
+            _virtualLength = header.FinalLength;
+            _preparationKey = header.PreparationKey;
+            _journalFinalized = true;
+        }
 
         Invariant();
     }
 
     /// <summary>
-    /// Finalizes the journal (if needed) and optionally applies it to the origin.
+    /// Gets the current lifecycle state of this journaled stream.
     /// </summary>
-    /// <param name="applyImmediately">When true, applies and deletes the journal; when false, leaves a finalized journal on disk.</param>
-    /// <exception cref="JournalInInvalidStateException">Thrown when no journal is open/finalized.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the journal cannot be opened or finalized.</exception>
-    public async Task Commit(bool applyImmediately = true)
-    {
-        if (_state == JournaledStreamState.Clean)
-            return;
+    public JournaledStreamState State => _state;
 
-        RequireState(JournaledStreamState.JournalOpened, JournaledStreamState.JournalFinalized);
+    /// <summary>
+    /// Gets the durable preparation key for a prepared or committed journal.
+    /// </summary>
+    public Guid? PreparationKey => _preparationKey;
+
+    internal ulong? JournalNonce => _journalNonce;
+
+    /// <summary>
+    /// Finalizes the journal under a coordination key without making the commit decision durable.
+    /// </summary>
+    public async Task Prepare(Guid preparationKey)
+    {
+        if (preparationKey == Guid.Empty)
+            throw new ArgumentException("The preparation key must not be empty", nameof(preparationKey));
+
+        if (_state == JournaledStreamState.Prepared)
+        {
+            if (_preparationKey == preparationKey)
+                return;
+
+            throw new JournalInInvalidStateException("The journal is already prepared with a different key");
+        }
+
+        RequireState(JournaledStreamState.Ready, JournaledStreamState.Dirty);
+        OpenJournal();
         Debug.Assert(IsJournalOpened());
 
-        if (_state == JournaledStreamState.JournalOpened)
+        if (!_journalFinalized)
         {
             await _journal.FinalizeJournal(_virtualLength);
-
-            // Update header
-            _journalStream.Seek(0, SeekOrigin.Begin);
-            if (!JournaledStreamHelpers.TryRead(_journalStream, JournalFileHeader.ExpectedMagic,
-                    out JournalFileHeader header))
-                throw new JournalCorruptedException("Updating the header on the journal was not possible", false);
-
-            header.Flags |= JournalHeaderFlags.Committed;
-            _journalStream.Seek(0, SeekOrigin.Begin);
-            _journalStream.Write(header.AsSpan());
-            await _journalStream.FlushAsync();
-
-            _state = JournaledStreamState.JournalFinalized;
+            _journalFinalized = true;
         }
 
-        if (applyImmediately)
-        {
-            await _journal.ApplyJournal();
-            _state = JournaledStreamState.Clean;
+        await _journalStream.FlushDurablyAsync();
 
+        JournalFileHeader header = ReadHeaderForUpdate();
+        header.PreparationKey = preparationKey;
+        header.FinalLength = _virtualLength;
+        header.Flags = JournalHeaderFlags.None;
+        await WriteHeaderAndFlush(header);
+
+        header.Flags = JournalHeaderFlags.Prepared;
+        await WriteHeaderAndFlush(header);
+
+        _preparationKey = preparationKey;
+        _state = JournaledStreamState.Prepared;
+        Invariant();
+    }
+
+    /// <summary>
+    /// Persists a commit marker without applying the journal to the origin.
+    /// </summary>
+    public async Task Commit()
+    {
+        if (_state is JournaledStreamState.Ready or JournaledStreamState.CommittedButNotApplied)
+            return;
+
+        if (_state == JournaledStreamState.Prepared)
+        {
+            if (_allowUnkeyedCommit && _preparationKey.HasValue)
+            {
+                await Commit(_preparationKey.Value);
+                return;
+            }
+
+            throw new JournalInInvalidStateException(
+                "A prepared journal must be committed with its matching preparation key");
+        }
+
+        RequireState(JournaledStreamState.Dirty);
+        Guid preparationKey = Guid.NewGuid();
+        await Prepare(preparationKey);
+        _allowUnkeyedCommit = true;
+        await Commit(preparationKey);
+    }
+
+    /// <summary>
+    /// Persists a commit marker for a journal prepared with the matching key.
+    /// </summary>
+    public async Task Commit(Guid preparationKey)
+    {
+        if (preparationKey == Guid.Empty)
+            throw new ArgumentException("The preparation key must not be empty", nameof(preparationKey));
+
+        if (_state == JournaledStreamState.CommittedButNotApplied)
+        {
+            if (_preparationKey == preparationKey)
+                return;
+
+            throw new JournalInInvalidStateException("The committed journal uses a different preparation key");
+        }
+
+        RequireState(JournaledStreamState.Prepared);
+        Debug.Assert(IsJournalOpened());
+
+        if (_preparationKey != preparationKey)
+            throw new JournalInInvalidStateException("The supplied preparation key does not match the journal");
+
+        JournalFileHeader header = ReadHeaderForUpdate();
+        if (header.PreparationKey != preparationKey ||
+            (header.Flags & JournalHeaderFlags.Prepared) == 0)
+            throw new JournalCorruptedException("The prepared journal header does not match its in-memory state", false);
+
+        header.Flags |= JournalHeaderFlags.Committed;
+        await WriteHeaderAndFlush(header);
+
+        _state = JournaledStreamState.CommittedButNotApplied;
+        _allowUnkeyedCommit = false;
+        Invariant();
+    }
+
+    /// <summary>
+    /// Applies a committed journal to the origin and removes the journal after a successful flush.
+    /// </summary>
+    public async Task Apply()
+    {
+        if (_state == JournaledStreamState.Ready)
+            return;
+
+        RequireState(JournaledStreamState.CommittedButNotApplied);
+        EnsureFinalizedJournalOpen();
+
+        await _journal.ApplyJournal();
+        await _origin.FlushDurablyAsync();
+        try
+        {
             CloseJournal(true);
         }
+        catch
+        {
+            if (_journalStreamFactory.TryOpen(string.Empty, false, out Stream? reopenedStream))
+            {
+                try
+                {
+                    _journalStream = reopenedStream;
+                    _journal = _journalFactory.Open(_origin, reopenedStream);
+                }
+                catch
+                {
+                    reopenedStream.Dispose();
+                    _journalStream = null;
+                    _journal = null;
+                }
+            }
+            else
+            {
+                ResetToReady();
+            }
 
-        Contracts.Ensures((applyImmediately && _state == JournaledStreamState.Clean) ||
-                          (!applyImmediately && _state == JournaledStreamState.JournalFinalized));
+            throw;
+        }
+
+        ResetToReady();
         Invariant();
     }
 
@@ -104,18 +255,20 @@ public sealed class JournaledStream : Stream
     /// <exception cref="JournalInInvalidStateException">Thrown when no journal has been opened.</exception>
     public async Task Rollback()
     {
-        if (_state == JournaledStreamState.Clean)
+        if (_state == JournaledStreamState.Ready)
             return;
 
-        RequireState(JournaledStreamState.JournalOpened);
-        Debug.Assert(IsJournalOpened());
+        RequireState(JournaledStreamState.Dirty, JournaledStreamState.Prepared);
 
         _virtualOffset = Math.Clamp(_virtualOffset, 0, _origin.Length);
         _virtualLength = _origin.Length;
-
-        _state = JournaledStreamState.Clean;
-
         CloseJournal(true);
+
+        _preparationKey = null;
+        _journalFinalized = false;
+        _recoveryOnlyDirty = false;
+        _allowUnkeyedCommit = false;
+        _state = JournaledStreamState.Ready;
 
         Invariant();
     }
@@ -126,14 +279,15 @@ public sealed class JournaledStream : Stream
     /// <exception cref="JournalInInvalidStateException">Thrown when the stream is not in a readable state.</exception>
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened,
-            JournaledStreamState.JournalFinalized);
+        RequireUsableJournal();
+        RequireState(JournaledStreamState.Ready, JournaledStreamState.Dirty,
+            JournaledStreamState.Prepared, JournaledStreamState.CommittedButNotApplied);
 
         // Trim down the read to match the length of the stream, at most
         int maxToRead = (int)Math.Min(_virtualLength - _virtualOffset, buffer.Length);
         buffer = buffer.Slice(0, maxToRead);
 
-        if (_state == JournaledStreamState.Clean)
+        if (_state == JournaledStreamState.Ready)
         {
             _origin.Seek(_virtualOffset, SeekOrigin.Begin);
             int read = await _origin.ReadAsync(buffer, cancellationToken);
@@ -164,7 +318,8 @@ public sealed class JournaledStream : Stream
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
         CancellationToken cancellationToken = default)
     {
-        RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened);
+        RequireUsableJournal();
+        RequireState(JournaledStreamState.Ready, JournaledStreamState.Dirty);
 
         if (buffer.Length == 0)
             return;
@@ -190,7 +345,8 @@ public sealed class JournaledStream : Stream
     /// <exception cref="JournalInInvalidStateException">Thrown when the stream is not in a writable state.</exception>
     public override void SetLength(long value)
     {
-        RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened);
+        RequireUsableJournal();
+        RequireState(JournaledStreamState.Ready, JournaledStreamState.Dirty);
         if (value < 0)
             throw new ArgumentOutOfRangeException(nameof(value));
 
@@ -209,8 +365,9 @@ public sealed class JournaledStream : Stream
     /// <exception cref="JournalCommittedButNotAppliedException">A write was attempted on a journal which is not yet applied to the origin.</exception>
     public override long Seek(long offset, SeekOrigin origin)
     {
-        RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened,
-            JournaledStreamState.JournalFinalized);
+        RequireUsableJournal();
+        RequireState(JournaledStreamState.Ready, JournaledStreamState.Dirty,
+            JournaledStreamState.Prepared, JournaledStreamState.CommittedButNotApplied);
 
         long newOffset = origin switch
         {
@@ -223,9 +380,9 @@ public sealed class JournaledStream : Stream
         if (newOffset < 0)
             throw new ArgumentOutOfRangeException(nameof(offset),
                 $"Desired offset, {offset} from {origin} placed the offset at {newOffset} which was out of range");
-        if (newOffset > _virtualLength && _state == JournaledStreamState.JournalFinalized)
+        if (newOffset > _virtualLength && _state is JournaledStreamState.Prepared or JournaledStreamState.CommittedButNotApplied)
             throw new JournalCommittedButNotAppliedException(
-                "Cannot write to a committed but not yet applied journal. Call Commit() first to complete the journal, before writing again");
+                "Cannot extend a prepared or committed journal. Apply or roll it back before writing again");
 
         // If we're outside the origin, we're in Write-territory
         if (newOffset > _origin.Length)
@@ -253,20 +410,21 @@ public sealed class JournaledStream : Stream
     [MemberNotNull(nameof(_journalStream), nameof(_journal))]
     private void OpenJournal()
     {
-        if (_state is JournaledStreamState.JournalOpened)
+        if (_state is JournaledStreamState.Dirty)
         {
             Debug.Assert(_journal != null && _journalStream != null);
             return;
         }
 
-        RequireState(JournaledStreamState.Clean);
+        RequireState(JournaledStreamState.Ready);
 
         // Open a journal
         if (!_journalStreamFactory.TryOpen(string.Empty, true, out _journalStream))
             throw new InvalidOperationException("Unable to open a journal stream");
 
         _journal = _journalFactory.Create(_origin, _journalStream);
-        _state = JournaledStreamState.JournalOpened;
+        _journalNonce = ReadHeaderForUpdate().Nonce;
+        _state = JournaledStreamState.Dirty;
     }
 
     private void CloseJournal(bool discard)
@@ -279,7 +437,10 @@ public sealed class JournaledStream : Stream
             _journalStream = null;
 
             if (discard)
+            {
                 _journalStreamFactory.Delete(string.Empty);
+                _journalNonce = null;
+            }
         }
     }
 
@@ -296,14 +457,14 @@ public sealed class JournaledStream : Stream
         Invariant();
     }
 
-    public override bool CanRead => _origin.CanRead && _state is JournaledStreamState.Clean
-        or JournaledStreamState.JournalOpened or JournaledStreamState.JournalFinalized;
+    public override bool CanRead => !_recoveryOnlyDirty && _origin.CanRead && _state is JournaledStreamState.Ready
+        or JournaledStreamState.Dirty or JournaledStreamState.Prepared or JournaledStreamState.CommittedButNotApplied;
 
-    public override bool CanSeek => _origin.CanSeek && _state is JournaledStreamState.Clean
-        or JournaledStreamState.JournalOpened or JournaledStreamState.JournalFinalized;
+    public override bool CanSeek => !_recoveryOnlyDirty && _origin.CanSeek && _state is JournaledStreamState.Ready
+        or JournaledStreamState.Dirty or JournaledStreamState.Prepared or JournaledStreamState.CommittedButNotApplied;
 
     public override bool CanWrite =>
-        _origin.CanWrite && _state is JournaledStreamState.Clean or JournaledStreamState.JournalOpened;
+        !_recoveryOnlyDirty && _origin.CanWrite && _state is JournaledStreamState.Ready or JournaledStreamState.Dirty;
 
     public override long Length => _virtualLength;
 
@@ -311,19 +472,21 @@ public sealed class JournaledStream : Stream
     {
         get
         {
-            RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened,
-                JournaledStreamState.JournalFinalized);
+            RequireUsableJournal();
+            RequireState(JournaledStreamState.Ready, JournaledStreamState.Dirty,
+                JournaledStreamState.Prepared, JournaledStreamState.CommittedButNotApplied);
             return _virtualOffset;
         }
         set
         {
-            RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened,
-                JournaledStreamState.JournalFinalized);
+            RequireUsableJournal();
+            RequireState(JournaledStreamState.Ready, JournaledStreamState.Dirty,
+                JournaledStreamState.Prepared, JournaledStreamState.CommittedButNotApplied);
             if (value < 0)
                 throw new ArgumentOutOfRangeException(nameof(value), "Position must be non-negative");
 
             if (value > _virtualLength)
-                RequireState(JournaledStreamState.Clean, JournaledStreamState.JournalOpened);
+                RequireState(JournaledStreamState.Ready, JournaledStreamState.Dirty);
 
             _virtualOffset = value;
             _virtualLength = Math.Max(_virtualLength, _virtualOffset);
@@ -338,15 +501,72 @@ public sealed class JournaledStream : Stream
             throw new JournalInInvalidStateException(_state, allowedStats);
     }
 
+    private void RequireUsableJournal()
+    {
+        if (_recoveryOnlyDirty)
+            throw new JournalInInvalidStateException(
+                "An unfinalized journal reopened for coordinated recovery can only be rolled back");
+    }
+
+    private JournalFileHeader ReadHeaderForUpdate()
+    {
+        Debug.Assert(_journalStream != null);
+        _journalStream.Seek(0, SeekOrigin.Begin);
+        if (!JournaledStreamHelpers.TryRead(_journalStream, JournalFileHeader.ExpectedMagic,
+                out JournalFileHeader header))
+            throw new JournalCorruptedException("Updating the journal header was not possible", false);
+
+        return header;
+    }
+
+    private async Task WriteHeaderAndFlush(JournalFileHeader header)
+    {
+        Debug.Assert(_journalStream != null);
+        _journalStream.Seek(0, SeekOrigin.Begin);
+        _journalStream.Write(header.AsSpan());
+        await _journalStream.FlushDurablyAsync();
+    }
+
+    [MemberNotNull(nameof(_journalStream), nameof(_journal))]
+    private void EnsureFinalizedJournalOpen()
+    {
+        if (IsJournalOpened())
+            return;
+
+        if (!_journalStreamFactory.TryOpen(string.Empty, false, out Stream? reopenedStream))
+            throw new JournalCorruptedException("The finalized journal is no longer available", true);
+
+        try
+        {
+            _journal = _journalFactory.Open(_origin, reopenedStream);
+            _journalStream = reopenedStream;
+        }
+        catch
+        {
+            reopenedStream.Dispose();
+            throw;
+        }
+    }
+
+    private void ResetToReady()
+    {
+        _virtualLength = _origin.Length;
+        _virtualOffset = Math.Clamp(_virtualOffset, 0, _virtualLength);
+        _preparationKey = null;
+        _journalFinalized = false;
+        _recoveryOnlyDirty = false;
+        _allowUnkeyedCommit = false;
+        _state = JournaledStreamState.Ready;
+    }
+
     private void Invariant()
     {
-        Contracts.Invariant(_state != JournaledStreamState.Unset, "State must be initialized");
         Contracts.Invariant(_virtualOffset >= 0, "Virtual offset must be non-negative");
         Contracts.Invariant(_virtualLength >= 0, "Virtual length must be non-negative");
         Contracts.Invariant(_virtualOffset <= _virtualLength);
-        Contracts.Invariant((_journal == null) == (_journalStream == null));
+        Contracts.Invariant(_recoveryOnlyDirty || ((_journal == null) == (_journalStream == null)));
 
-        if (_state == JournaledStreamState.Clean)
+        if (_state == JournaledStreamState.Ready)
         {
             Contracts.Invariant(_virtualLength == _origin.Length);
 
@@ -356,9 +576,10 @@ public sealed class JournaledStream : Stream
         {
             Contracts.Invariant(_journal == null);
         }
-        else if (_state is JournaledStreamState.JournalOpened or JournaledStreamState.JournalFinalized)
+        else if (_state is JournaledStreamState.Dirty or JournaledStreamState.Prepared or
+                 JournaledStreamState.CommittedButNotApplied)
         {
-            Contracts.Invariant(_journal != null);
+            Contracts.Invariant(_journal != null || _recoveryOnlyDirty);
         }
     }
 

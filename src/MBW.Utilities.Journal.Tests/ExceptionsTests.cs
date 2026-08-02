@@ -10,7 +10,7 @@ public class ExceptionsTests : TestsBase
         await using (var walJournal = await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider))
         {
             walJournal.Write("Hello"u8);
-            await walJournal.Commit(false);
+        await walJournal.Commit();
         }
 
         await Assert.ThrowsAsync<JournalIncorrectImplementationException>(() =>

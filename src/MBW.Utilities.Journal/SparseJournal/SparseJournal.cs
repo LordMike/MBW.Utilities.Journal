@@ -146,7 +146,7 @@ internal sealed class SparseJournal : IJournal
     public async ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken cancellationToken)
     {
         if (buffer.Length == 0)
-            throw new ArgumentException("The read cannot be a 0-byte size", nameof(buffer));
+            return 0;
 
         // TODO: Use input buffers if possible, allow smaller than blocksize?
         // TODO: Calculate ranges of dirty when read, avoid blockwise read; wait till "not dirty" to read, to simplify code
@@ -224,7 +224,8 @@ internal sealed class SparseJournal : IJournal
     {
         Debug.Assert(_blockSize.IsAligned((ulong)alignedOffset));
         Debug.Assert(_blockSize.IsAligned((ulong)buffer.Length));
-        Debug.Assert(_sparseBitmap.Count == 0 || _blockSize.IsAligned((ulong)_journal.Length));
+        long journalDataEnd = _footer.HasValue ? (long)_footer.Value.StartOfBitmap : _journal.Length;
+        Debug.Assert(_sparseBitmap.Count == 0 || _blockSize.IsAligned((ulong)journalDataEnd));
 
         // Read in origin
         long originToRead = Math.Clamp(_origin.Length - alignedOffset, 0, buffer.Length);
@@ -240,7 +241,7 @@ internal sealed class SparseJournal : IJournal
         uint block = _blockSize.GetBlockCountRoundUp((ulong)alignedOffset);
 
         // Truncate buffer to what the journal has, so we don't need to worry about reading outside the journal. This may produce 0, that's fine
-        Memory<byte> journalBuffer = buffer[..(int)Math.Clamp(_journal.Length - journalOffset, 0, buffer.Length)];
+        Memory<byte> journalBuffer = buffer[..(int)Math.Clamp(journalDataEnd - journalOffset, 0, buffer.Length)];
         Debug.Assert(_blockSize.IsAligned((ulong)journalBuffer.Length));
 
         for (uint i = 0; i < journalBuffer.Length; i += _blockSize.Size)
