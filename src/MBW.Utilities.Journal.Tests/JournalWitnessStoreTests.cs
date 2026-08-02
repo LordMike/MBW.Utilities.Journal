@@ -1,4 +1,5 @@
 using MBW.Utilities.Journal.Tests.Helpers;
+using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal.Tests;
 
@@ -11,12 +12,10 @@ public class JournalWitnessStoreTests
         Guid key = Guid.NewGuid();
 
         Assert.Null(await store.ReadAsync());
-        Assert.Null(store.FileContents);
 
         await store.StoreAsync(key);
         await store.StoreAsync(key);
         Assert.Equal(key, await store.ReadAsync());
-        Assert.NotEmpty(store.FileContents!);
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.StoreAsync(Guid.NewGuid()));
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -25,16 +24,24 @@ public class JournalWitnessStoreTests
         await store.ClearAsync(key);
         await store.ClearAsync(key);
         Assert.Null(await store.ReadAsync());
-        Assert.Null(store.FileContents);
     }
 
     [Fact]
-    public async Task CorruptWitnessIsNeverTreatedAsMissing()
+    public void WitnessRecordValidatesSerializedData()
     {
-        MemoryJournalWitnessStore store = new() { FileContents = [1, 2, 3] };
+        Guid key = Guid.NewGuid();
+        byte[] record = JournalWitnessRecord.Create(key);
+        Assert.Equal(key, JournalWitnessRecord.Read(record));
 
-        await Assert.ThrowsAsync<InvalidDataException>(async () => await store.ReadAsync());
-        await Assert.ThrowsAsync<InvalidDataException>(async () => await store.StoreAsync(Guid.NewGuid()));
-        Assert.Equal([1, 2, 3], store.FileContents);
+        Assert.Throws<ArgumentException>(() => JournalWitnessRecord.Create(Guid.Empty));
+        Assert.Throws<InvalidDataException>(() => JournalWitnessRecord.Read([1, 2, 3]));
+
+        byte[] badMagic = record.ToArray();
+        badMagic[0] ^= 0xFF;
+        Assert.Throws<InvalidDataException>(() => JournalWitnessRecord.Read(badMagic));
+
+        byte[] badChecksum = record.ToArray();
+        badChecksum[sizeof(ulong)] ^= 0xFF;
+        Assert.Throws<InvalidDataException>(() => JournalWitnessRecord.Read(badChecksum));
     }
 }
