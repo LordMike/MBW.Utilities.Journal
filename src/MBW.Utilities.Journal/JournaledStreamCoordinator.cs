@@ -50,6 +50,10 @@ public sealed class JournaledStreamCoordinator
         JournalCommitFailureMode onFailure = JournalCommitFailureMode.PreserveForRecovery,
         CancellationToken cancellationToken = default)
     {
+        if (onFailure == JournalCommitFailureMode.Unset || !Enum.IsDefined(onFailure))
+            throw new ArgumentOutOfRangeException(nameof(onFailure), onFailure,
+                "A defined commit failure policy must be selected.");
+
         await _operationGate.WaitAsync(cancellationToken);
         try
         {

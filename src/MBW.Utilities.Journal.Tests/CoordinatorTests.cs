@@ -163,6 +163,28 @@ public class CoordinatorTests
         Assert.Equal(expectedState != JournaledStreamState.Ready, journals.HasAnyJournal);
     }
 
+    [Theory]
+    [InlineData(JournalCommitFailureMode.Unset)]
+    [InlineData((JournalCommitFailureMode)99)]
+    public async Task UndefinedFailurePolicyIsRejectedWithoutChangingParticipants(
+        JournalCommitFailureMode failureMode)
+    {
+        TestStream origin = new();
+        MemoryJournalStreamFactory journals = new();
+        MemoryJournalWitnessStore witness = new();
+        await using JournaledStream stream =
+            await JournaledStreamFactory.CreateWalJournal(origin.GetStream(), journals);
+        JournaledStreamCoordinator coordinator =
+            await JournaledStreamCoordinator.CreateAsync([stream], witness);
+        stream.WriteStr("pending");
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => coordinator.CommitAsync(failureMode));
+
+        Assert.Equal(JournaledStreamState.Dirty, stream.State);
+        Assert.Null(witness.Value);
+        Assert.True(journals.HasAnyJournal);
+    }
+
     [Fact]
     public async Task CommittedMarkerCompletesRecoveryEvenWhenWitnessIsMissing()
     {
@@ -203,7 +225,7 @@ public class CoordinatorTests
         TestStream originA = new();
         TestStream originB = new();
         MemoryJournalStreamFactory journalsA = new();
-        FaultingJournalStreamFactory journalsB = new() { FailOnFlush = 4 };
+        FaultingJournalStreamFactory journalsB = new() { FailOnFlush = 5 };
         MemoryJournalWitnessStore witness = new();
 
         await using JournaledStream streamA =
