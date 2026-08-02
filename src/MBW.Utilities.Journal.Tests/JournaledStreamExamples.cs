@@ -145,9 +145,9 @@ public class JournaledStreamExamples
     private static string ReadAllText(Stream stream)
     {
         stream.Position = 0;
-        byte[] contents = new byte[stream.Length];
-        stream.ReadExactly(contents);
-        return System.Text.Encoding.UTF8.GetString(contents);
+        using StreamReader reader = new(stream, System.Text.Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+        return reader.ReadToEnd();
     }
 
     private sealed class TemporaryDirectory : IDisposable
