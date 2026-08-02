@@ -28,7 +28,7 @@ public abstract class JournalFactoryBase(byte implementationId) : IJournalFactor
         JournalFileHeader header = new JournalFileHeader
         {
             Magic = JournalFileHeader.ExpectedMagic,
-            Nonce = unchecked((ulong)Random.Shared.NextInt64()),
+            Nonce = JournalNonceGenerator.Next(),
             ImplementationId = implementationId,
             Flags = JournalHeaderFlags.None,
             PreparationKey = Guid.Empty,
