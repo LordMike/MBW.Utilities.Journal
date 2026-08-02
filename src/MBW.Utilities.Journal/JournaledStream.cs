@@ -122,6 +122,8 @@ public sealed class JournaledStream : Stream
             _journalFinalized = true;
         }
 
+        await _journalStream.FlushDurablyAsync();
+
         JournalFileHeader header = ReadHeaderForUpdate();
         header.PreparationKey = preparationKey;
         header.FinalLength = _virtualLength;
@@ -513,7 +515,7 @@ public sealed class JournaledStream : Stream
         Debug.Assert(_journalStream != null);
         _journalStream.Seek(0, SeekOrigin.Begin);
         _journalStream.Write(header.AsSpan());
-        await _journalStream.FlushAsync();
+        await _journalStream.FlushDurablyAsync();
     }
 
     [MemberNotNull(nameof(_journalStream), nameof(_journal))]
