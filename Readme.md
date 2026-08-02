@@ -30,10 +30,11 @@ For an atomic commit across multiple streams, open every stream with
 coordinator. Recovery must use the same fixed participant set and witness store.
 
 More extended examples:
-* Real-file, executable how-to guides for commit/apply, rollback, restart recovery, and
-  coordinated multi-file commits are in
+* The canonical initialization and recovery sequences for a single journaled file and a
+  coordinated set of two or more files are executable tests in
   [JournaledStreamExamples.cs](src/MBW.Utilities.Journal.Tests/JournaledStreamExamples.cs).
-  The comments alongside each operation explain the expected state and file behavior.
+  These examples are intended as copyable how-to guides. Their comments identify the chosen
+  automatic recovery policies, when recovery completes, and when the streams are safe to use.
 * Implement your own Journal implementation: refer to the [sample project](src/MBW.Utilities.Journal.SampleJournal).
 * The remaining tests may also be useful for references
 
