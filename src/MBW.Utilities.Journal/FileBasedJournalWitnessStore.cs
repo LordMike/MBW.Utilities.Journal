@@ -1,6 +1,5 @@
-using System.Buffers.Binary;
-using System.IO.Hashing;
 using MBW.Utilities.Journal.Abstracts;
+using MBW.Utilities.Journal.Structures;
 
 namespace MBW.Utilities.Journal;
 
@@ -9,9 +8,6 @@ namespace MBW.Utilities.Journal;
 /// </summary>
 public sealed class FileBasedJournalWitnessStore : IJournalWitnessStore
 {
-    private const ulong Magic = 0x315449574C4E524A; // "JRNLWIT1"
-    private const int PayloadSize = sizeof(ulong) + 16;
-    private const int RecordSize = PayloadSize + sizeof(ulong);
     private readonly string _file;
 
     public FileBasedJournalWitnessStore(string file)
@@ -39,25 +35,12 @@ public sealed class FileBasedJournalWitnessStore : IJournalWitnessStore
 
         await using (stream)
         {
-            if (stream.Length != RecordSize)
+            if (stream.Length != JournalWitnessRecord.Size)
                 throw new InvalidDataException("The journal witness has an invalid length.");
 
-            byte[] record = new byte[RecordSize];
+            byte[] record = new byte[JournalWitnessRecord.Size];
             await stream.ReadExactlyAsync(record, cancellationToken);
-
-            if (BinaryPrimitives.ReadUInt64LittleEndian(record) != Magic)
-                throw new InvalidDataException("The journal witness has an unknown format version.");
-
-            ulong expectedChecksum = BinaryPrimitives.ReadUInt64LittleEndian(record.AsSpan(PayloadSize));
-            ulong actualChecksum = XxHash64.HashToUInt64(record.AsSpan(0, PayloadSize));
-            if (expectedChecksum != actualChecksum)
-                throw new InvalidDataException("The journal witness checksum is invalid.");
-
-            Guid key = new Guid(record.AsSpan(sizeof(ulong), 16));
-            if (key == Guid.Empty)
-                throw new InvalidDataException("The journal witness contains an empty preparation key.");
-
-            return key;
+            return JournalWitnessRecord.Read(record);
         }
     }
 
@@ -82,7 +65,7 @@ public sealed class FileBasedJournalWitnessStore : IJournalWitnessStore
         string temporaryFile = _file + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            byte[] record = CreateRecord(preparationKey);
+            byte[] record = JournalWitnessRecord.Create(preparationKey);
             await using (FileStream stream = new FileStream(temporaryFile, FileMode.CreateNew,
                              FileAccess.Write, FileShare.None, 4096,
                              FileOptions.Asynchronous | FileOptions.WriteThrough))
@@ -130,15 +113,5 @@ public sealed class FileBasedJournalWitnessStore : IJournalWitnessStore
             throw new InvalidOperationException("The witness belongs to another prepared transaction.");
 
         File.Delete(_file);
-    }
-
-    private static byte[] CreateRecord(Guid preparationKey)
-    {
-        byte[] record = new byte[RecordSize];
-        BinaryPrimitives.WriteUInt64LittleEndian(record, Magic);
-        preparationKey.TryWriteBytes(record.AsSpan(sizeof(ulong), 16));
-        ulong checksum = XxHash64.HashToUInt64(record.AsSpan(0, PayloadSize));
-        BinaryPrimitives.WriteUInt64LittleEndian(record.AsSpan(PayloadSize), checksum);
-        return record;
     }
 }
