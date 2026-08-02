@@ -1,5 +1,8 @@
 ﻿using System.Numerics;
 using System.Text;
+using MBW.Utilities.Journal.Exceptions;
+using MBW.Utilities.Journal.Extensions;
+using MBW.Utilities.Journal.SparseJournal;
 using MBW.Utilities.Journal.Primitives;
 using MBW.Utilities.Journal.Structures;
 using MBW.Utilities.Journal.Tests.Helpers;
@@ -109,5 +112,51 @@ public class SparseTests : TestsBase
 
         byte[] actual = TestFile.ReadFullBytes();
         Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public async Task EmptyBitmapCannotHidePersistedBlocks()
+    {
+        TestFile.WriteStr("original");
+        await using (JournaledStream writer =
+                     await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider))
+        {
+            writer.WriteStr("updated");
+            await writer.Commit();
+        }
+
+        Assert.True(JournalFileProvider.TryOpen(string.Empty, false, out Stream? journal));
+        using (journal)
+        {
+            journal.Seek(-SparseJournalFooter.StructSize, SeekOrigin.End);
+            Span<byte> footerBuffer = stackalloc byte[SparseJournalFooter.StructSize];
+            SparseJournalFooter footer = journal.ReadOne<SparseJournalFooter>(footerBuffer);
+            footer.BitmapLengthUlongs = 0;
+            footer.StartOfBitmap = (ulong)(journal.Length - SparseJournalFooter.StructSize);
+            journal.Seek(-SparseJournalFooter.StructSize, SeekOrigin.End);
+            journal.Write(footer.AsSpan());
+        }
+
+        await Assert.ThrowsAsync<JournalCorruptedException>(() =>
+            JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider));
+        Assert.Equal("original", TestFile.ReadFullStr());
+        Assert.True(JournalFileProvider.HasAnyJournal);
+    }
+
+    [Fact]
+    public async Task EmptyPreparedJournalHasAValidEmptyBitmap()
+    {
+        Guid key = Guid.NewGuid();
+        await using (JournaledStream writer =
+                     await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider))
+        {
+            await writer.Prepare(key);
+            await writer.Commit(key);
+        }
+
+        await using JournaledStream recovered =
+            await JournaledStreamFactory.CreateSparseJournal(TestFile, JournalFileProvider);
+        Assert.Equal(JournaledStreamState.Ready, recovered.State);
+        Assert.False(JournalFileProvider.HasAnyJournal);
     }
 }

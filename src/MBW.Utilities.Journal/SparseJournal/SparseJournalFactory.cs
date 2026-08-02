@@ -43,13 +43,31 @@ public sealed class SparseJournalFactory : JournalFactoryBase
             throw new JournalCorruptedException("Journal header was corrupted, footer did not match headers info",
                 false);
         ulong persistedBlockSize = footer.BlockSize < 63 ? 1UL << footer.BlockSize : 0;
-        if (header.FinalLength != footer.FinalLength || persistedBlockSize < (ulong)JournalFileHeader.StructSize ||
-            footer.StartOfBitmap > (ulong)(journal.Length - SparseJournalFooter.StructSize) ||
-            footer.BitmapLengthUlongs > int.MaxValue ||
-            footer.BitmapLengthUlongs > 0 &&
-            (footer.StartOfBitmap < persistedBlockSize || footer.StartOfBitmap % persistedBlockSize != 0) ||
-            footer.StartOfBitmap + footer.BitmapLengthUlongs * sizeof(ulong) !=
-            (ulong)(journal.Length - SparseJournalFooter.StructSize))
+        ulong journalPayloadEnd = (ulong)(journal.Length - SparseJournalFooter.StructSize);
+        bool invalidBounds = header.FinalLength != footer.FinalLength ||
+                             persistedBlockSize < (ulong)JournalFileHeader.StructSize ||
+                             footer.StartOfBitmap > journalPayloadEnd ||
+                             footer.BitmapLengthUlongs > int.MaxValue;
+
+        if (!invalidBounds && footer.BitmapLengthUlongs == 0)
+        {
+            invalidBounds = footer.StartOfBitmap != (ulong)JournalFileHeader.StructSize;
+        }
+        else if (!invalidBounds)
+        {
+            invalidBounds = footer.StartOfBitmap < persistedBlockSize * 2 ||
+                            footer.StartOfBitmap % persistedBlockSize != 0;
+            if (!invalidBounds)
+            {
+                ulong journalDataBlocks = footer.StartOfBitmap / persistedBlockSize - 1;
+                ulong expectedBitmapLength = (journalDataBlocks + 63) / 64;
+                invalidBounds = expectedBitmapLength != footer.BitmapLengthUlongs;
+            }
+        }
+
+        invalidBounds |= footer.StartOfBitmap + (ulong)footer.BitmapLengthUlongs * sizeof(ulong) !=
+                         journalPayloadEnd;
+        if (invalidBounds)
             throw new JournalCorruptedException("The sparse journal footer contains invalid bounds", false);
 
         // Read bitmap
