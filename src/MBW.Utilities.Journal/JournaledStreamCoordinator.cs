@@ -21,6 +21,22 @@ public sealed class JournaledStreamCoordinator
         _recoveryMode = recoveryMode;
     }
 
+    /// <summary>
+    /// Creates a coordinator for a fixed participant set and completes the configured initial recovery before
+    /// returning.
+    /// </summary>
+    /// <param name="participants">The complete set of journaled streams that always participate together.</param>
+    /// <param name="witnessStore">The durable witness store dedicated to this participant set.</param>
+    /// <param name="recoveryMode">The automatic actions allowed for pending journals found during initialization.</param>
+    /// <param name="cancellationToken">Token used to cancel recovery.</param>
+    /// <returns>A coordinator whose participants are all in the <see cref="JournaledStreamState.Ready"/> state.</returns>
+    /// <remarks>
+    /// Open every participant with <see cref="JournalOpenMode.Coordinated"/> and do not expose or use the streams
+    /// until this method returns successfully. Reuse the same complete participant set and witness store after a
+    /// restart.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The participant set is empty, contains nulls, or contains duplicates.</exception>
+    /// <exception cref="JournalRecoveryRequiredException">The configured mode does not allow required recovery.</exception>
     public static async Task<JournaledStreamCoordinator> CreateAsync(
         IEnumerable<JournaledStream> participants,
         IJournalWitnessStore witnessStore,
@@ -46,6 +62,17 @@ public sealed class JournaledStreamCoordinator
         return coordinator;
     }
 
+    /// <summary>
+    /// Prepares every participant, stores the durable witness, commits every marker, applies every journal, and clears
+    /// the witness after all participants are ready.
+    /// </summary>
+    /// <param name="onFailure">The policy used only while rollback can still be proven safe.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <remarks>
+    /// Once the witness or any commit marker is durable, failures preserve the transaction for recovery and never
+    /// roll it back. Call <see cref="RecoverAsync"/> to retry an interrupted operation.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="onFailure"/> is unset or undefined.</exception>
     public async Task CommitAsync(
         JournalCommitFailureMode onFailure = JournalCommitFailureMode.PreserveForRecovery,
         CancellationToken cancellationToken = default)
@@ -65,6 +92,12 @@ public sealed class JournaledStreamCoordinator
         }
     }
 
+    /// <summary>
+    /// Retries recovery for the coordinator's participants using the recovery policy selected at creation.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel recovery.</param>
+    /// <remarks>Use this after a commit or prior recovery attempt failed while leaving retryable journals intact.</remarks>
+    /// <exception cref="JournalRecoveryRequiredException">The configured mode does not allow required recovery.</exception>
     public async Task RecoverAsync(CancellationToken cancellationToken = default)
     {
         await _operationGate.WaitAsync(cancellationToken);
@@ -78,6 +111,12 @@ public sealed class JournaledStreamCoordinator
         }
     }
 
+    /// <summary>
+    /// Rolls back every dirty or prepared participant when no durable commit decision exists.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel rollback.</param>
+    /// <remarks>This operation is rejected if a witness or committed participant makes rollback unsafe.</remarks>
+    /// <exception cref="JournalInInvalidStateException">A witness or durable commit marker exists.</exception>
     public async Task RollbackAsync(CancellationToken cancellationToken = default)
     {
         await _operationGate.WaitAsync(cancellationToken);
