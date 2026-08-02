@@ -212,6 +212,7 @@ public sealed class JournaledStream : Stream
         EnsureFinalizedJournalOpen();
 
         await _journal.ApplyJournal();
+        await _origin.FlushDurablyAsync();
         try
         {
             CloseJournal(true);

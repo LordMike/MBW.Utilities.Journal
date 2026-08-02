@@ -74,6 +74,7 @@ public static class JournaledStreamFactory
             {
                 IJournal journal = journalFactory.Open(origin, journalStream);
                 await journal.ApplyJournal();
+                await origin.FlushDurablyAsync();
             }
 
             streamFactory.Delete(string.Empty);
