@@ -103,7 +103,7 @@ public class JournalOpenModeTests : TestsBase
             // No commit
         });
 
-        JournalCorruptedException ex = await RunScenarioAsync<JournalCorruptedException>(async () =>
+        JournalRecoveryRequiredException ex = await RunScenarioAsync<JournalRecoveryRequiredException>(async () =>
         {
             await using JournaledStream _ =
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider, JournalOpenMode.ApplyCommittedJournals);

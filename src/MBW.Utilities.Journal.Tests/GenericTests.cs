@@ -39,7 +39,7 @@ public class GenericTests : TestsBase
 
             // Write data and commit
             journaledStream.WriteStr("CommittedData");
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
 
             // Write more data without committing
             journaledStream.WriteStr("UncommittedData");
@@ -63,7 +63,7 @@ public class GenericTests : TestsBase
             await using JournaledStream journaledStream = await createDelegate(TestFile, JournalFileProvider);
 
             // Commit without writing
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
         });
 
         // Ensure no changes are made to the file
@@ -86,7 +86,7 @@ public class GenericTests : TestsBase
 
             // Write exactly at the end
             journaledStream.WriteStr("End");
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
 
             // Verify if the file has appended the data correctly
             Assert.Equal("DataEnd", journaledStream.ReadFullStr());
@@ -94,7 +94,7 @@ public class GenericTests : TestsBase
             // Now seek beyond the end and write more data
             journaledStream.Seek(10, SeekOrigin.Begin);
             journaledStream.WriteStr("Beyond");
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
         });
 
         // Check if the new data starts from position 10, filling with zeros if needed
@@ -142,7 +142,7 @@ public class GenericTests : TestsBase
             journaledStream.WriteStr("88774466");
             Assert.Equal("9876588774466", journaledStream.ReadFullStr());
 
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
         });
 
         // Check final result
@@ -168,7 +168,7 @@ public class GenericTests : TestsBase
 
             // Write at EOF
             journaledStream.WriteStr("6789");
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
 
             // Verify if the new data is appended correctly
             Assert.Equal("123456789", journaledStream.ReadFullStr());
@@ -176,7 +176,7 @@ public class GenericTests : TestsBase
             // Seek beyond EOF and try to write
             journaledStream.Seek(15, SeekOrigin.Begin);
             journaledStream.WriteStr("End");
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
         });
 
         // Check for zero padding and the new data
@@ -354,7 +354,7 @@ public class GenericTests : TestsBase
             Assert.Equal("Alpha", journaledStream.ReadFullStr());
             Assert.True(JournalFileProvider.HasAnyJournal);
 
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
 
             // Post-commit
             Assert.Equal("Alpha", journaledStream.ReadFullStr());
@@ -365,7 +365,7 @@ public class GenericTests : TestsBase
             Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
             Assert.True(JournalFileProvider.HasAnyJournal);
 
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
 
             // Post-commit
             Assert.Equal("AlphaBeta", journaledStream.ReadFullStr());
@@ -398,7 +398,7 @@ public class GenericTests : TestsBase
             Assert.Equal("Original", TestFile.ReadFullStr());
             Assert.True(JournalFileProvider.HasAnyJournal);
 
-            await journaledStream.Commit();
+            await journaledStream.Apply();
         });
 
         Assert.False(JournalFileProvider.HasAnyJournal);
@@ -425,7 +425,7 @@ public class GenericTests : TestsBase
             Assert.Equal(11, journaledStream.Length);
             Assert.Equal("BeginMidEnd", journaledStream.ReadFullStr());
 
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
         });
 
         Assert.Equal("BeginMidEnd", TestFile.ReadFullStr());
@@ -439,7 +439,7 @@ public class GenericTests : TestsBase
             journaledStream.WriteStr("u");
             Assert.Equal("BegunMidEnd", journaledStream.ReadFullStr());
 
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
         });
 
         Assert.Equal("BegunMidEnd", TestFile.ReadFullStr());
@@ -459,7 +459,7 @@ public class GenericTests : TestsBase
 
             Assert.Equal("BeganMidEndPostStuff", journaledStream.ReadFullStr());
 
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
         });
 
         Assert.Equal("BeganMidEndPostStuff", TestFile.ReadFullStr());
@@ -473,7 +473,7 @@ public class GenericTests : TestsBase
 
             Assert.Equal("BeganMid", journaledStream.ReadFullStr());
 
-            await journaledStream.Commit();
+            await journaledStream.Commit(true);
         });
 
         Assert.Equal("BeganMid", TestFile.ReadFullStr());

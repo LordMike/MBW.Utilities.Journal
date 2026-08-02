@@ -16,8 +16,9 @@ public sealed class SparseJournalFactory : JournalFactoryBase
     {
         // The minimum size we allow, is 5 (2^5 = 32 bytes), as this is larger than our JournalFileHeader
         // I don't know what a max should be, we will potentially use a few times 2^blockSize memory, so it will likely fail with OOMs if the blockSize is too high
-        if (blockSize < 5)
-            throw new ArgumentOutOfRangeException(nameof(blockSize), "The blockSize must be greater than or equal to 5.");
+        if (blockSize >= 63 || (1UL << blockSize) < (ulong)JournalFileHeader.StructSize)
+            throw new ArgumentOutOfRangeException(nameof(blockSize),
+                $"The block size must fit the {JournalFileHeader.StructSize}-byte journal header.");
         
         _blockSize = BlockSize.FromPowerOfTwo(blockSize);
     }
@@ -41,6 +42,15 @@ public sealed class SparseJournalFactory : JournalFactoryBase
         if (header.Nonce != footer.HeaderNonce)
             throw new JournalCorruptedException("Journal header was corrupted, footer did not match headers info",
                 false);
+        ulong persistedBlockSize = footer.BlockSize < 63 ? 1UL << footer.BlockSize : 0;
+        if (header.FinalLength != footer.FinalLength || persistedBlockSize < (ulong)JournalFileHeader.StructSize ||
+            footer.StartOfBitmap > (ulong)(journal.Length - SparseJournalFooter.StructSize) ||
+            footer.BitmapLengthUlongs > int.MaxValue ||
+            footer.BitmapLengthUlongs > 0 &&
+            (footer.StartOfBitmap < persistedBlockSize || footer.StartOfBitmap % persistedBlockSize != 0) ||
+            footer.StartOfBitmap + footer.BitmapLengthUlongs * sizeof(ulong) !=
+            (ulong)(journal.Length - SparseJournalFooter.StructSize))
+            throw new JournalCorruptedException("The sparse journal footer contains invalid bounds", false);
 
         // Read bitmap
         journal.Seek((long)footer.StartOfBitmap, SeekOrigin.Begin);

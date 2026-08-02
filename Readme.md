@@ -17,9 +17,17 @@ var myJournal = await JournaledStreamFactory.CreateSparseJournal(myStream, "Demo
 // Always use the Journal to write to the file
 myJournal.Write("Hello world"u8);
 
-// Remember to call Commit() to apply changes
-await myJournal.Commit();
+// Commit and apply the changes to the origin
+await myJournal.Commit(true);
 ```
+
+`Commit()` now persists only the durable commit marker. Follow it with `Apply()`, or use
+the `Commit(true)` convenience extension shown above, to update the origin.
+
+For an atomic commit across multiple streams, open every stream with
+`JournalOpenMode.Coordinated`, create a `JournaledStreamCoordinator` with a shared
+`IJournalWitnessStore`, then write through the streams and call `CommitAsync()` on the
+coordinator. Recovery must use the same fixed participant set and witness store.
 
 More extended examples:
 * Refer to this example in the tests: [JournaledStreamExamples.cs](src/MBW.Utilities.Journal.Tests/JournaledStreamExamples.cs).

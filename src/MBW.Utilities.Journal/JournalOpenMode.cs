@@ -6,6 +6,8 @@ public enum JournalOpenMode
     None,
     ApplyCommittedJournals = 1,
     DiscardUncommittedJournals = 2,
+    OpenPendingJournals = 4,
 
-    Default = ApplyCommittedJournals
+    Default = ApplyCommittedJournals,
+    Coordinated = OpenPendingJournals
 }

@@ -14,6 +14,10 @@ MBW.Utilities.Journal.Abstracts.IJournalStreamFactory
 MBW.Utilities.Journal.Abstracts.IJournalStreamFactory.Delete(string! identifier) -> void
 MBW.Utilities.Journal.Abstracts.IJournalStreamFactory.Exists(string! identifier) -> bool
 MBW.Utilities.Journal.Abstracts.IJournalStreamFactory.TryOpen(string! identifier, bool createIfMissing, out System.IO.Stream? stream) -> bool
+MBW.Utilities.Journal.Abstracts.IJournalWitnessStore
+MBW.Utilities.Journal.Abstracts.IJournalWitnessStore.ClearAsync(System.Guid preparationKey, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+MBW.Utilities.Journal.Abstracts.IJournalWitnessStore.ReadAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Guid?>
+MBW.Utilities.Journal.Abstracts.IJournalWitnessStore.StoreAsync(System.Guid preparationKey, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 MBW.Utilities.Journal.Abstracts.IStructWithMagic<TMagic>
 MBW.Utilities.Journal.Abstracts.IStructWithMagic<TMagic>.ExpectedMagic.get -> TMagic
 MBW.Utilities.Journal.Abstracts.IStructWithMagic<TMagic>.Magic.get -> TMagic
@@ -30,30 +34,64 @@ MBW.Utilities.Journal.Exceptions.JournalIncorrectImplementationException
 MBW.Utilities.Journal.Exceptions.JournalIncorrectImplementationException.JournalIncorrectImplementationException(byte journalImplementationId, byte programImplementationId) -> void
 MBW.Utilities.Journal.Exceptions.JournalInInvalidStateException
 MBW.Utilities.Journal.Exceptions.JournalInInvalidStateException.JournalInInvalidStateException(string! message) -> void
+MBW.Utilities.Journal.Exceptions.JournalRecoveryRequiredException
+MBW.Utilities.Journal.Exceptions.JournalRecoveryRequiredException.JournalRecoveryRequiredException(string! message) -> void
 MBW.Utilities.Journal.FileBasedJournalStreamFactory
 MBW.Utilities.Journal.FileBasedJournalStreamFactory.Delete(string! identifier) -> void
 MBW.Utilities.Journal.FileBasedJournalStreamFactory.Exists(string! identifier) -> bool
 MBW.Utilities.Journal.FileBasedJournalStreamFactory.FileBasedJournalStreamFactory(string! file) -> void
 MBW.Utilities.Journal.FileBasedJournalStreamFactory.TryOpen(string! identifier, bool createIfMissing, out System.IO.Stream? stream) -> bool
-MBW.Utilities.Journal.JournaledStream.Commit(bool applyImmediately = true) -> System.Threading.Tasks.Task!
+MBW.Utilities.Journal.FileBasedJournalWitnessStore
+MBW.Utilities.Journal.FileBasedJournalWitnessStore.ClearAsync(System.Guid preparationKey, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+MBW.Utilities.Journal.FileBasedJournalWitnessStore.FileBasedJournalWitnessStore(string! file) -> void
+MBW.Utilities.Journal.FileBasedJournalWitnessStore.ReadAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Guid?>
+MBW.Utilities.Journal.FileBasedJournalWitnessStore.StoreAsync(System.Guid preparationKey, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+MBW.Utilities.Journal.JournalCommitFailureMode
+MBW.Utilities.Journal.JournalCommitFailureMode.PreserveForRecovery = 0 -> MBW.Utilities.Journal.JournalCommitFailureMode
+MBW.Utilities.Journal.JournalCommitFailureMode.RollbackIfSafe = 1 -> MBW.Utilities.Journal.JournalCommitFailureMode
+MBW.Utilities.Journal.JournalCoordinatorRecoveryMode
+MBW.Utilities.Journal.JournalCoordinatorRecoveryMode.CommitWitnessed = 1 -> MBW.Utilities.Journal.JournalCoordinatorRecoveryMode
+MBW.Utilities.Journal.JournalCoordinatorRecoveryMode.Default = MBW.Utilities.Journal.JournalCoordinatorRecoveryMode.CommitWitnessed | MBW.Utilities.Journal.JournalCoordinatorRecoveryMode.RollbackUnwitnessed -> MBW.Utilities.Journal.JournalCoordinatorRecoveryMode
+MBW.Utilities.Journal.JournalCoordinatorRecoveryMode.None = 0 -> MBW.Utilities.Journal.JournalCoordinatorRecoveryMode
+MBW.Utilities.Journal.JournalCoordinatorRecoveryMode.RollbackUnwitnessed = 2 -> MBW.Utilities.Journal.JournalCoordinatorRecoveryMode
+MBW.Utilities.Journal.JournaledStream.Apply() -> System.Threading.Tasks.Task!
+MBW.Utilities.Journal.JournaledStream.Commit() -> System.Threading.Tasks.Task!
+MBW.Utilities.Journal.JournaledStream.Commit(System.Guid preparationKey) -> System.Threading.Tasks.Task!
+MBW.Utilities.Journal.JournaledStream.PreparationKey.get -> System.Guid?
+MBW.Utilities.Journal.JournaledStream.Prepare(System.Guid preparationKey) -> System.Threading.Tasks.Task!
 MBW.Utilities.Journal.JournaledStream.Rollback() -> System.Threading.Tasks.Task!
 MBW.Utilities.Journal.Exceptions.JournalCorruptedException
 MBW.Utilities.Journal.Exceptions.JournalCorruptedException.JournalCorruptedException(string! message, bool originalFileHasBeenAltered) -> void
 MBW.Utilities.Journal.Exceptions.JournalCorruptedException.OriginalFileHasBeenAltered.get -> bool
 MBW.Utilities.Journal.JournaledStream
+MBW.Utilities.Journal.JournaledStream.State.get -> MBW.Utilities.Journal.JournaledStreamState
+MBW.Utilities.Journal.JournaledStreamCoordinator
+MBW.Utilities.Journal.JournaledStreamCoordinator.CommitAsync(MBW.Utilities.Journal.JournalCommitFailureMode onFailure = MBW.Utilities.Journal.JournalCommitFailureMode.PreserveForRecovery, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+MBW.Utilities.Journal.JournaledStreamCoordinator.RecoverAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+MBW.Utilities.Journal.JournaledStreamCoordinator.RollbackAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+MBW.Utilities.Journal.JournaledStreamExtensions
 MBW.Utilities.Journal.JournaledStreamFactory
+MBW.Utilities.Journal.JournaledStreamState
+MBW.Utilities.Journal.JournaledStreamState.Closed = 4 -> MBW.Utilities.Journal.JournaledStreamState
+MBW.Utilities.Journal.JournaledStreamState.CommittedButNotApplied = 3 -> MBW.Utilities.Journal.JournaledStreamState
+MBW.Utilities.Journal.JournaledStreamState.Dirty = 1 -> MBW.Utilities.Journal.JournaledStreamState
+MBW.Utilities.Journal.JournaledStreamState.Prepared = 2 -> MBW.Utilities.Journal.JournaledStreamState
+MBW.Utilities.Journal.JournaledStreamState.Ready = 0 -> MBW.Utilities.Journal.JournaledStreamState
 MBW.Utilities.Journal.JournalOpenMode
 MBW.Utilities.Journal.JournalOpenMode.ApplyCommittedJournals = 1 -> MBW.Utilities.Journal.JournalOpenMode
+MBW.Utilities.Journal.JournalOpenMode.Coordinated = 4 -> MBW.Utilities.Journal.JournalOpenMode
 MBW.Utilities.Journal.JournalOpenMode.Default = 1 -> MBW.Utilities.Journal.JournalOpenMode
 MBW.Utilities.Journal.JournalOpenMode.DiscardUncommittedJournals = 2 -> MBW.Utilities.Journal.JournalOpenMode
 MBW.Utilities.Journal.JournalOpenMode.None = 0 -> MBW.Utilities.Journal.JournalOpenMode
+MBW.Utilities.Journal.JournalOpenMode.OpenPendingJournals = 4 -> MBW.Utilities.Journal.JournalOpenMode
 MBW.Utilities.Journal.SparseJournal.SparseJournalFactory
 MBW.Utilities.Journal.SparseJournal.SparseJournalFactory.SparseJournalFactory(byte blockSize = 12) -> void
 MBW.Utilities.Journal.Structures.JournalFileHeader
 MBW.Utilities.Journal.Structures.JournalFileHeader.JournalFileHeader() -> void
 MBW.Utilities.Journal.Structures.JournalHeaderFlags
-MBW.Utilities.Journal.Structures.JournalHeaderFlags.Committed = 1 -> MBW.Utilities.Journal.Structures.JournalHeaderFlags
+MBW.Utilities.Journal.Structures.JournalHeaderFlags.Committed = 2 -> MBW.Utilities.Journal.Structures.JournalHeaderFlags
 MBW.Utilities.Journal.Structures.JournalHeaderFlags.None = 0 -> MBW.Utilities.Journal.Structures.JournalHeaderFlags
+MBW.Utilities.Journal.Structures.JournalHeaderFlags.Prepared = 1 -> MBW.Utilities.Journal.Structures.JournalHeaderFlags
 MBW.Utilities.Journal.WalJournal.WalJournalFactory
 MBW.Utilities.Journal.WalJournal.WalJournalFactory.WalJournalFactory() -> void
 override MBW.Utilities.Journal.JournaledStream.CanRead.get -> bool
@@ -72,14 +110,18 @@ override MBW.Utilities.Journal.JournaledStream.SetLength(long value) -> void
 override MBW.Utilities.Journal.JournaledStream.Write(byte[]! buffer, int offset, int count) -> void
 override MBW.Utilities.Journal.JournaledStream.Write(System.ReadOnlySpan<byte> buffer) -> void
 override MBW.Utilities.Journal.JournaledStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+required MBW.Utilities.Journal.Structures.JournalFileHeader.FinalLength -> long
 required MBW.Utilities.Journal.Structures.JournalFileHeader.Flags -> MBW.Utilities.Journal.Structures.JournalHeaderFlags
 required MBW.Utilities.Journal.Structures.JournalFileHeader.ImplementationId -> byte
 required MBW.Utilities.Journal.Structures.JournalFileHeader.Magic -> ulong
 required MBW.Utilities.Journal.Structures.JournalFileHeader.Nonce -> ulong
+required MBW.Utilities.Journal.Structures.JournalFileHeader.PreparationKey -> System.Guid
+static MBW.Utilities.Journal.JournaledStreamCoordinator.CreateAsync(System.Collections.Generic.IEnumerable<MBW.Utilities.Journal.JournaledStream!>! participants, MBW.Utilities.Journal.Abstracts.IJournalWitnessStore! witnessStore, MBW.Utilities.Journal.JournalCoordinatorRecoveryMode recoveryMode = MBW.Utilities.Journal.JournalCoordinatorRecoveryMode.Default, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<MBW.Utilities.Journal.JournaledStreamCoordinator!>!
+static MBW.Utilities.Journal.JournaledStreamExtensions.Commit(this MBW.Utilities.Journal.JournaledStream! stream, bool applyImmediately) -> System.Threading.Tasks.Task!
 static MBW.Utilities.Journal.JournaledStreamFactory.CreateJournal(System.IO.Stream! origin, MBW.Utilities.Journal.Abstracts.IJournalStreamFactory! journalStreamFactory, MBW.Utilities.Journal.Abstracts.IJournalFactory! journalFactory, MBW.Utilities.Journal.JournalOpenMode openMode = MBW.Utilities.Journal.JournalOpenMode.ApplyCommittedJournals) -> System.Threading.Tasks.Task<MBW.Utilities.Journal.JournaledStream!>!
 static MBW.Utilities.Journal.JournaledStreamFactory.CreateSparseJournal(System.IO.Stream! origin, MBW.Utilities.Journal.Abstracts.IJournalStreamFactory! journalStreamFactory, byte blockSize, MBW.Utilities.Journal.JournalOpenMode openMode = MBW.Utilities.Journal.JournalOpenMode.ApplyCommittedJournals) -> System.Threading.Tasks.Task<MBW.Utilities.Journal.JournaledStream!>!
 static MBW.Utilities.Journal.JournaledStreamFactory.CreateSparseJournal(System.IO.Stream! origin, MBW.Utilities.Journal.Abstracts.IJournalStreamFactory! journalStreamFactory, MBW.Utilities.Journal.JournalOpenMode openMode = MBW.Utilities.Journal.JournalOpenMode.ApplyCommittedJournals) -> System.Threading.Tasks.Task<MBW.Utilities.Journal.JournaledStream!>!
-static MBW.Utilities.Journal.JournaledStreamFactory.CreateSparseJournal(System.IO.Stream! origin, string! journalFile, MBW.Utilities.Journal.JournalOpenMode openMode = MBW.Utilities.Journal.JournalOpenMode.ApplyCommittedJournals) -> System.Threading.Tasks.Task<MBW.Utilities.Journal.JournaledStream!>!
+static MBW.Utilities.Journal.JournaledStreamFactory.CreateSparseJournal(System.IO.Stream! origin, string! journalFile, byte blockSize = 12, MBW.Utilities.Journal.JournalOpenMode openMode = MBW.Utilities.Journal.JournalOpenMode.ApplyCommittedJournals) -> System.Threading.Tasks.Task<MBW.Utilities.Journal.JournaledStream!>!
 static MBW.Utilities.Journal.JournaledStreamFactory.CreateWalJournal(System.IO.Stream! origin, MBW.Utilities.Journal.Abstracts.IJournalStreamFactory! journalStreamFactory, MBW.Utilities.Journal.JournalOpenMode openMode = MBW.Utilities.Journal.JournalOpenMode.ApplyCommittedJournals) -> System.Threading.Tasks.Task<MBW.Utilities.Journal.JournaledStream!>!
 static MBW.Utilities.Journal.JournaledStreamFactory.CreateWalJournal(System.IO.Stream! origin, string! journalFile, MBW.Utilities.Journal.JournalOpenMode openMode = MBW.Utilities.Journal.JournalOpenMode.ApplyCommittedJournals) -> System.Threading.Tasks.Task<MBW.Utilities.Journal.JournaledStream!>!
 static MBW.Utilities.Journal.Structures.JournalFileHeader.ExpectedMagic.get -> ulong

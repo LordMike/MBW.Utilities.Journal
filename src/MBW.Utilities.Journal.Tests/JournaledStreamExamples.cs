@@ -23,9 +23,9 @@ public class JournaledStreamExamples
 
                     // Commit the transaction, persisting the data to the file
                     // Alternatively, you can also call RollBack() to delete the journal and discard any changes
-                    await journalStream.Commit();
+                    await journalStream.Commit(true);
                     
-                    // You can also defer the applying of the stream, by calling Commit(false), and later Commit(true). 
+                    // You can defer application with Commit() (or Commit(false)), followed later by Apply().
                 }
             }
 

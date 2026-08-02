@@ -12,36 +12,64 @@ namespace MBW.Utilities.Journal;
 /// </summary>
 public static class JournaledStreamFactory
 {
-    private static async ValueTask HandleOpenMode(Stream origin, IJournalStreamFactory streamFactory,
+    private static async ValueTask<JournaledStream?> HandleOpenMode(Stream origin, IJournalStreamFactory streamFactory,
         IJournalFactory journalFactory, JournalOpenMode openMode)
     {
         if (!streamFactory.TryOpen(string.Empty, false, out Stream? journalStream))
-            return;
+            return null;
 
         if (!JournaledStreamHelpers.TryRead(journalStream, JournalFileHeader.ExpectedMagic,
-                out JournalFileHeader header) ||
-            (header.Flags & JournalHeaderFlags.Committed) == 0)
+                out JournalFileHeader header))
         {
-            // Corrupt stream
             if ((openMode & JournalOpenMode.DiscardUncommittedJournals) != 0)
             {
-                // Delete it
                 await journalStream.DisposeAsync();
                 streamFactory.Delete(string.Empty);
-                return;
+                return null;
             }
 
-            // Abort
+            await journalStream.DisposeAsync();
             throw new JournalCorruptedException(
-                "There is an journal present for this stream, but it has not been committed. Discarding the journal was also not allowed.",
+                "A journal is present, but it is not a supported V3 journal.",
                 false);
         }
 
-        // Handle existing stream
-        if ((openMode & JournalOpenMode.ApplyCommittedJournals) != 0)
+        const JournalHeaderFlags knownFlags = JournalHeaderFlags.Prepared | JournalHeaderFlags.Committed;
+        bool prepared = (header.Flags & JournalHeaderFlags.Prepared) != 0;
+        bool committed = (header.Flags & JournalHeaderFlags.Committed) != 0;
+        if ((header.Flags & ~knownFlags) != 0 || committed && !prepared ||
+            prepared && (header.PreparationKey == Guid.Empty || header.FinalLength < 0))
+        {
+            await journalStream.DisposeAsync();
+            throw new JournalCorruptedException("The journal header contains an invalid state", false);
+        }
+
+        if ((openMode & JournalOpenMode.OpenPendingJournals) != 0)
         {
             journalStream.Seek(0, SeekOrigin.Begin);
+            try
+            {
+                IJournal? journal = prepared ? journalFactory.Open(origin, journalStream) : null;
+                return new JournaledStream(origin, streamFactory, journalFactory, journalStream, header, journal);
+            }
+            catch
+            {
+                await journalStream.DisposeAsync();
+                throw;
+            }
+        }
 
+        if (committed)
+        {
+            if ((openMode & JournalOpenMode.ApplyCommittedJournals) == 0)
+            {
+                await journalStream.DisposeAsync();
+                throw new JournalCommittedButNotAppliedException(
+                    "The journal is committed but has not been applied. Enable " +
+                    nameof(JournalOpenMode.ApplyCommittedJournals) + " or use coordinated opening.");
+            }
+
+            journalStream.Seek(0, SeekOrigin.Begin);
             await using (journalStream)
             {
                 IJournal journal = journalFactory.Open(origin, journalStream);
@@ -49,13 +77,20 @@ public static class JournaledStreamFactory
             }
 
             streamFactory.Delete(string.Empty);
+            return null;
         }
-        else
+
+        if ((openMode & JournalOpenMode.DiscardUncommittedJournals) != 0)
         {
-            throw new JournalCommittedButNotAppliedException(
-                "The journal for this stream exists, but has not been applied fully. Open the Journal with " +
-                nameof(JournalOpenMode.ApplyCommittedJournals) + " to complete the process");
+            await journalStream.DisposeAsync();
+            streamFactory.Delete(string.Empty);
+            return null;
         }
+
+        await journalStream.DisposeAsync();
+        throw new JournalRecoveryRequiredException(prepared
+            ? "A prepared journal requires coordinated recovery."
+            : "An unfinalized journal requires rollback or coordinated recovery.");
     }
 
     /// <summary>
@@ -73,9 +108,17 @@ public static class JournaledStreamFactory
         IJournalStreamFactory journalStreamFactory, IJournalFactory journalFactory,
         JournalOpenMode openMode = JournalOpenMode.Default)
     {
-        await HandleOpenMode(origin, journalStreamFactory, journalFactory, openMode);
+        const JournalOpenMode knownModes = JournalOpenMode.ApplyCommittedJournals |
+                                           JournalOpenMode.DiscardUncommittedJournals |
+                                           JournalOpenMode.OpenPendingJournals;
+        if ((openMode & ~knownModes) != 0 ||
+            (openMode & JournalOpenMode.OpenPendingJournals) != 0 &&
+            (openMode & ~JournalOpenMode.OpenPendingJournals) != 0)
+            throw new ArgumentOutOfRangeException(nameof(openMode), openMode,
+                "Coordinated pending-journal opening cannot be combined with automatic apply or discard modes.");
 
-        return new JournaledStream(origin, journalStreamFactory, journalFactory);
+        JournaledStream? pending = await HandleOpenMode(origin, journalStreamFactory, journalFactory, openMode);
+        return pending ?? new JournaledStream(origin, journalStreamFactory, journalFactory);
     }
 
     /// <summary>
@@ -86,7 +129,7 @@ public static class JournaledStreamFactory
     /// await using var file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite);
     /// await using var js = await JournaledStreamFactory.CreateWalJournal(file, path + ".jrnl");
     /// js.Write(Encoding.UTF8.GetBytes("Hello"));
-    /// await js.Commit();
+    /// await js.Commit(true);
     /// </code>
     /// </summary>
     /// <param name="origin">Underlying stream to be journaled.</param>
@@ -124,7 +167,7 @@ public static class JournaledStreamFactory
     /// await using var file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite);
     /// await using var js = await JournaledStreamFactory.CreateSparseJournal(file, path + ".jrnl");
     /// js.Write(Encoding.UTF8.GetBytes("Hello"));
-    /// await js.Commit();
+    /// await js.Commit(true);
     /// </code>
     /// </summary>
     /// <param name="origin">Underlying stream to be journaled.</param>
@@ -139,12 +182,12 @@ public static class JournaledStreamFactory
         CreateSparseJournal(origin, new FileBasedJournalStreamFactory(journalFile), blockSize, openMode);
 
     /// <summary>
-    /// <inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,MBW.Utilities.Journal.JournalOpenMode)"/>
+    /// <inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,byte,MBW.Utilities.Journal.JournalOpenMode)"/>
     /// </summary>
     /// <param name="origin">Underlying stream to be journaled.</param>
     /// <param name="journalStreamFactory">A producer for journal streams.</param>
     /// <param name="openMode">Controls whether to apply committed journals or discard uncommitted ones when present.</param>
-    /// <returns><inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,MBW.Utilities.Journal.JournalOpenMode)"/></returns>
+    /// <returns><inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,byte,MBW.Utilities.Journal.JournalOpenMode)"/></returns>
     /// <exception cref="JournalCorruptedException">Thrown when an uncommitted or corrupt journal is present and the open mode does not allow discarding.</exception>
     /// <exception cref="JournalCommittedButNotAppliedException">Thrown when a committed journal is present and the open mode does not allow applying it.</exception>
     public static Task<JournaledStream> CreateSparseJournal(Stream origin,
@@ -153,13 +196,13 @@ public static class JournaledStreamFactory
         CreateSparseJournal(origin, journalStreamFactory, 12, openMode);
 
     /// <summary>
-    /// <inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,MBW.Utilities.Journal.JournalOpenMode)"/>
+    /// <inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,byte,MBW.Utilities.Journal.JournalOpenMode)"/>
     /// </summary>
     /// <param name="origin">Underlying stream to be journaled.</param>
     /// <param name="journalStreamFactory">A producer for journal streams.</param>
     /// <param name="blockSize">The block size to use for aligned writes. All writes must be aligned internally. Smaller block sizes favor smaller edits, while larger are more suited for large edits. Block size is expressed in a power of two, like 12 for 1024 bytes.</param>
     /// <param name="openMode">Controls whether to apply committed journals or discard uncommitted ones when present.</param>
-    /// <returns><inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,MBW.Utilities.Journal.JournalOpenMode)"/></returns>
+    /// <returns><inheritdoc cref="CreateSparseJournal(System.IO.Stream,string,byte,MBW.Utilities.Journal.JournalOpenMode)"/></returns>
     /// <exception cref="JournalCorruptedException">Thrown when an uncommitted or corrupt journal is present and the open mode does not allow discarding.</exception>
     /// <exception cref="JournalCommittedButNotAppliedException">Thrown when a committed journal is present and the open mode does not allow applying it.</exception>
     public static Task<JournaledStream> CreateSparseJournal(Stream origin,

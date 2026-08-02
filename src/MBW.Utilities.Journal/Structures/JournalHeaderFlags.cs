@@ -6,7 +6,12 @@ public enum JournalHeaderFlags : byte
     None,
 
     /// <summary>
-    /// This journal file represents a committed journal. The associated footer will describe the journal in more detail
+    /// The journal footer, preparation key, and final length are durable.
     /// </summary>
-    Committed = 1,
+    Prepared = 1,
+
+    /// <summary>
+    /// A durable commit decision exists. This flag is valid only together with <see cref="Prepared"/>.
+    /// </summary>
+    Committed = 2,
 }

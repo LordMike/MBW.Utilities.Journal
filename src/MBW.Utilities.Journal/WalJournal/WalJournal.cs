@@ -34,6 +34,24 @@ internal sealed class WalJournal : IJournal
         _journal = journal;
         _header = header;
         _footer = footer;
+
+        journal.Seek(JournalFileHeader.StructSize, SeekOrigin.Begin);
+        Span<byte> localHeaderBuffer = stackalloc byte[WalJournalLocalHeader.StructSize];
+        for (uint i = 0; i < footer.Entries; i++)
+        {
+            WalJournalLocalHeader localHeader = journal.ReadOne<WalJournalLocalHeader>(localHeaderBuffer);
+            if (localHeader.Magic != WalJournalLocalHeader.ExpectedMagic ||
+                localHeader.InnerOffset < 0 ||
+                journal.Position + localHeader.Length > journal.Length - WalJournalFooter.StructSize)
+                throw new JournalCorruptedException("The WAL journal contains an invalid segment", false);
+
+            long dataOffset = journal.Position;
+            TrackSegment(localHeader.InnerOffset, dataOffset, localHeader.Length);
+            journal.Seek(localHeader.Length, SeekOrigin.Current);
+        }
+
+        if (journal.Position != journal.Length - WalJournalFooter.StructSize)
+            throw new JournalCorruptedException("The WAL journal contains trailing segment data", false);
     }
 
     public async ValueTask FinalizeJournal(long finalLength)
@@ -198,7 +216,13 @@ internal sealed class WalJournal : IJournal
         if (buffer.Length > _journalMaxSegmentDataLength)
             _journalMaxSegmentDataLength = (ushort)buffer.Length;
 
-        // Track in the segment list
+        TrackSegment(thisWrite.Start, journalDataOffset, (ushort)thisWrite.Length);
+    }
+
+    private void TrackSegment(long innerOffset, long journalOffset, ushort length)
+    {
+        LongRange thisWrite = new LongRange(innerOffset, length);
+
         foreach (JournalSegment journalSegment in _journalSegments.Query(thisWrite.Start, thisWrite.End))
         {
             LongRange thisSegment = new LongRange(journalSegment.InnerOffset, journalSegment.Length);
@@ -241,7 +265,7 @@ internal sealed class WalJournal : IJournal
 
         // Add this new segment
         _journalSegments.Add(thisWrite.Start, thisWrite.End,
-            new JournalSegment(thisWrite.Start, journalDataOffset, (ushort)thisWrite.Length));
+            new JournalSegment(thisWrite.Start, journalOffset, length));
     }
 
     private record struct JournalSegment(long InnerOffset, long JournalOffset, ushort Length);

@@ -79,7 +79,7 @@ public class WalTests : TestsBase
                 await JournaledStreamFactory.CreateWalJournal(TestFile, JournalFileProvider);
         });
 
-        Assert.True(ex.OriginalFileHasBeenAltered);
+        Assert.False(ex.OriginalFileHasBeenAltered);
 
         // Note: Original has been altered, as the length is applied before any journaled data is read
         // // Verify that the original data is still intact
