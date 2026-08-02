@@ -36,7 +36,7 @@ public sealed class JournaledStreamCoordinator
     /// restart.
     /// </remarks>
     /// <exception cref="ArgumentException">The participant set is empty, contains nulls, or contains duplicates.</exception>
-    /// <exception cref="JournalRecoveryRequiredException">The configured mode does not allow required recovery.</exception>
+    /// <exception cref="JournalRecoveryRequiredException">The configured mode does not allow required recovery, or a witnessed participant is missing.</exception>
     public static async Task<JournaledStreamCoordinator> CreateAsync(
         IEnumerable<JournaledStream> participants,
         IJournalWitnessStore witnessStore,
@@ -63,14 +63,15 @@ public sealed class JournaledStreamCoordinator
     }
 
     /// <summary>
-    /// Prepares every participant, stores the durable witness, commits every marker, applies every journal, and clears
-    /// the witness after all participants are ready.
+    /// Prepares every participant, stores the durable witness, commits every marker, clears the witness, and then
+    /// applies every journal.
     /// </summary>
     /// <param name="onFailure">The policy used only while rollback can still be proven safe.</param>
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
     /// <remarks>
-    /// Once the witness or any commit marker is durable, failures preserve the transaction for recovery and never
-    /// roll it back. Call <see cref="RecoverAsync"/> to retry an interrupted operation.
+    /// The witness records the exact journal nonce set and remains present until every commit marker is durable.
+    /// After it is cleared, each committed journal can be applied independently. Call <see cref="RecoverAsync"/> to
+    /// retry an interrupted operation.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="onFailure"/> is unset or undefined.</exception>
     public async Task CommitAsync(
@@ -97,7 +98,7 @@ public sealed class JournaledStreamCoordinator
     /// </summary>
     /// <param name="cancellationToken">Token used to cancel recovery.</param>
     /// <remarks>Use this after a commit or prior recovery attempt failed while leaving retryable journals intact.</remarks>
-    /// <exception cref="JournalRecoveryRequiredException">The configured mode does not allow required recovery.</exception>
+    /// <exception cref="JournalRecoveryRequiredException">The configured mode does not allow required recovery, or a witnessed participant is missing.</exception>
     public async Task RecoverAsync(CancellationToken cancellationToken = default)
     {
         await _operationGate.WaitAsync(cancellationToken);
@@ -122,8 +123,8 @@ public sealed class JournaledStreamCoordinator
         await _operationGate.WaitAsync(cancellationToken);
         try
         {
-            Guid? witness = await _witnessStore.ReadAsync(cancellationToken);
-            if (witness.HasValue)
+            JournalWitness? witness = await _witnessStore.ReadAsync(cancellationToken);
+            if (witness is not null)
                 throw new JournalInInvalidStateException("Rollback is forbidden while a durable witness exists");
             if (_participants.Any(static participant =>
                     participant.State == JournaledStreamState.CommittedButNotApplied))
@@ -141,12 +142,22 @@ public sealed class JournaledStreamCoordinator
     private async Task CommitCore(JournalCommitFailureMode onFailure, CancellationToken cancellationToken)
     {
         EnsureOpenParticipants();
-        Guid? witness = await _witnessStore.ReadAsync(cancellationToken);
-
-        if (witness.HasValue || _participants.Any(static participant =>
-                participant.State == JournaledStreamState.CommittedButNotApplied))
+        JournalWitness? existingWitness = await _witnessStore.ReadAsync(cancellationToken);
+        if (existingWitness is not null)
         {
-            await RecoverDecidedTransaction(witness, cancellationToken);
+            await CompleteWitnessedCommit(existingWitness, cancellationToken);
+            return;
+        }
+
+        bool hasDirty = HasState(JournaledStreamState.Dirty);
+        bool hasPrepared = HasState(JournaledStreamState.Prepared);
+        bool hasCommitted = HasState(JournaledStreamState.CommittedButNotApplied);
+        if (hasCommitted)
+        {
+            if (hasDirty || hasPrepared)
+                throw LostWitnessException();
+
+            await ApplyCommittedParticipants(cancellationToken);
             return;
         }
 
@@ -154,6 +165,7 @@ public sealed class JournaledStreamCoordinator
             return;
 
         Guid preparationKey = EnsureSinglePreparationKey() ?? Guid.NewGuid();
+        JournalWitness witness;
         try
         {
             foreach (JournaledStream participant in _participants)
@@ -165,48 +177,22 @@ public sealed class JournaledStreamCoordinator
                          participant.PreparationKey != preparationKey)
                     throw new JournalInInvalidStateException("Participants are not in one preparable transaction");
             }
+
+            witness = CreateWitness(preparationKey);
         }
         catch (Exception prepareException)
         {
-            if (onFailure == JournalCommitFailureMode.RollbackIfSafe)
-            {
-                Guid? observedWitness;
-                try
-                {
-                    observedWitness = await _witnessStore.ReadAsync(CancellationToken.None);
-                }
-                catch (Exception readException)
-                {
-                    throw new AggregateException(
-                        "Preparation failed and witness absence could not be confirmed.",
-                        prepareException, readException);
-                }
-
-                if (!observedWitness.HasValue)
-                {
-                    try
-                    {
-                        await RollbackParticipants(CancellationToken.None);
-                    }
-                    catch (Exception rollbackException)
-                    {
-                        throw new AggregateException("Preparation and safe rollback both failed.",
-                            prepareException, rollbackException);
-                    }
-                }
-            }
-
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(prepareException).Throw();
+            await HandlePreWitnessFailure(prepareException, onFailure);
             throw;
         }
 
         try
         {
-            await _witnessStore.StoreAsync(preparationKey, cancellationToken);
+            await _witnessStore.StoreAsync(witness, cancellationToken);
         }
         catch (Exception storeException)
         {
-            Guid? observed;
+            JournalWitness? observed;
             try
             {
                 observed = await _witnessStore.ReadAsync(CancellationToken.None);
@@ -217,11 +203,11 @@ public sealed class JournaledStreamCoordinator
                     storeException, readException);
             }
 
-            if (observed == preparationKey)
+            if (observed is not null && observed.ValueEquals(witness))
             {
                 // The durable install succeeded and only its acknowledgement failed.
             }
-            else if (!observed.HasValue)
+            else if (observed is null)
             {
                 if (onFailure == JournalCommitFailureMode.RollbackIfSafe)
                 {
@@ -240,79 +226,55 @@ public sealed class JournaledStreamCoordinator
             }
             else
             {
-                throw new InvalidOperationException("The witness belongs to another transaction.", storeException);
+                throw new InvalidOperationException("A different journal witness already exists.", storeException);
             }
         }
 
-        await CommitPreparedAndApply(preparationKey, cancellationToken);
+        await CompleteWitnessedCommit(witness, cancellationToken);
     }
 
     private async Task RecoverCore(CancellationToken cancellationToken)
     {
         EnsureOpenParticipants();
-        Guid? witness = await _witnessStore.ReadAsync(cancellationToken);
-        Guid? participantKey = EnsureSinglePreparationKey();
-        bool hasDirty = _participants.Any(static participant => participant.State == JournaledStreamState.Dirty);
-        bool hasPrepared = _participants.Any(static participant => participant.State == JournaledStreamState.Prepared);
-        bool hasCommitted = _participants.Any(static participant =>
-            participant.State == JournaledStreamState.CommittedButNotApplied);
+        JournalWitness? witness = await _witnessStore.ReadAsync(cancellationToken);
+        bool hasDirty = HasState(JournaledStreamState.Dirty);
+        bool hasPrepared = HasState(JournaledStreamState.Prepared);
+        bool hasCommitted = HasState(JournaledStreamState.CommittedButNotApplied);
 
-        if (witness.HasValue && participantKey.HasValue && witness.Value != participantKey.Value)
-            throw new InvalidOperationException("The witness and participant preparation keys do not match.");
-
-        if (hasDirty && (witness.HasValue || hasCommitted))
-            throw new InvalidOperationException("Dirty participants cannot coexist with a durable commit decision.");
-
-        if (hasCommitted)
+        if (witness is not null)
         {
-            if (!participantKey.HasValue)
-                throw new InvalidOperationException("A committed participant has no preparation key.");
-            await CommitPreparedAndApply(participantKey.Value, cancellationToken);
+            ValidateWitnessParticipants(witness);
+            if ((_recoveryMode & JournalCoordinatorRecoveryMode.CommitWitnessed) == 0)
+                throw new JournalRecoveryRequiredException(
+                    "A witnessed transaction requires commit recovery.");
+
+            await CompleteWitnessedCommit(witness, cancellationToken);
             return;
         }
 
-        if (witness.HasValue)
+        if (hasCommitted)
         {
-            if (hasPrepared)
-            {
-                if ((_recoveryMode & JournalCoordinatorRecoveryMode.CommitWitnessed) == 0)
-                    throw new JournalRecoveryRequiredException("A witnessed prepared transaction requires commit recovery.");
+            if (hasDirty || hasPrepared)
+                throw LostWitnessException();
 
-                await CommitPreparedAndApply(witness.Value, cancellationToken);
-                return;
-            }
-
-            if (_participants.All(static participant => participant.State == JournaledStreamState.Ready))
-            {
-                await _witnessStore.ClearAsync(witness.Value, cancellationToken);
-                return;
-            }
+            await ApplyCommittedParticipants(cancellationToken);
+            return;
         }
 
         if (hasDirty || hasPrepared)
         {
+            EnsureSinglePreparationKey();
             if ((_recoveryMode & JournalCoordinatorRecoveryMode.RollbackUnwitnessed) == 0)
-                throw new JournalRecoveryRequiredException("An unwitnessed transaction requires rollback recovery.");
+                throw new JournalRecoveryRequiredException(
+                    "An unwitnessed transaction requires rollback recovery.");
 
             await RollbackParticipants(cancellationToken);
         }
     }
 
-    private async Task RecoverDecidedTransaction(Guid? witness, CancellationToken cancellationToken)
+    private async Task CompleteWitnessedCommit(JournalWitness witness, CancellationToken cancellationToken)
     {
-        Guid? participantKey = EnsureSinglePreparationKey();
-        if (_participants.Any(static participant => participant.State == JournaledStreamState.Dirty))
-            throw new InvalidOperationException("A dirty participant cannot coexist with a durable commit decision.");
-        if (witness.HasValue && participantKey.HasValue && witness.Value != participantKey.Value)
-            throw new InvalidOperationException("The witness and participant preparation keys do not match.");
-
-        Guid key = witness ?? participantKey ??
-            throw new InvalidOperationException("The durable transaction has no preparation key.");
-        await CommitPreparedAndApply(key, cancellationToken);
-    }
-
-    private async Task CommitPreparedAndApply(Guid preparationKey, CancellationToken cancellationToken)
-    {
+        ValidateWitnessParticipants(witness);
         List<Exception> failures = [];
 
         foreach (JournaledStream participant in _participants.Where(static participant =>
@@ -321,9 +283,7 @@ public sealed class JournaledStreamCoordinator
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (participant.PreparationKey != preparationKey)
-                    throw new InvalidOperationException("A prepared participant has a different key.");
-                await participant.Commit(preparationKey);
+                await participant.Commit(witness.PreparationKey);
             }
             catch (Exception exception)
             {
@@ -331,16 +291,50 @@ public sealed class JournaledStreamCoordinator
             }
         }
 
-        if (_participants.Any(participant => participant.State is not (JournaledStreamState.Ready or
-                JournaledStreamState.CommittedButNotApplied) ||
-            participant.State == JournaledStreamState.CommittedButNotApplied &&
-            participant.PreparationKey != preparationKey))
+        if (_participants.Any(static participant =>
+                participant.State != JournaledStreamState.CommittedButNotApplied))
         {
             if (failures.Count == 1)
                 throw failures[0];
-            throw new AggregateException("Not every participant could be marked committed.", failures);
+            throw new AggregateException("Not every witnessed participant could be marked committed.", failures);
         }
 
+        await ClearCompletedWitness(witness, cancellationToken);
+        await ApplyCommittedParticipants(cancellationToken);
+    }
+
+    private async Task ClearCompletedWitness(JournalWitness witness, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _witnessStore.ClearAsync(witness, cancellationToken);
+        }
+        catch (Exception clearException)
+        {
+            JournalWitness? observed;
+            try
+            {
+                observed = await _witnessStore.ReadAsync(CancellationToken.None);
+            }
+            catch (Exception readException)
+            {
+                throw new AggregateException("Witness clearing failed and its durable state is unknown.",
+                    clearException, readException);
+            }
+
+            if (observed is null)
+                return;
+            if (observed.ValueEquals(witness))
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(clearException).Throw();
+
+            throw new InvalidOperationException(
+                "Witness clearing failed and the store contains a different witness.", clearException);
+        }
+    }
+
+    private async Task ApplyCommittedParticipants(CancellationToken cancellationToken)
+    {
+        List<Exception> failures = [];
         foreach (JournaledStream participant in _participants.Where(static participant =>
                      participant.State == JournaledStreamState.CommittedButNotApplied))
         {
@@ -355,13 +349,41 @@ public sealed class JournaledStreamCoordinator
             }
         }
 
-        if (_participants.All(static participant => participant.State == JournaledStreamState.Ready))
-            await _witnessStore.ClearAsync(preparationKey, cancellationToken);
-
         if (failures.Count == 1)
             throw failures[0];
         if (failures.Count > 1)
-            throw new AggregateException("The coordinated transaction did not complete cleanly.", failures);
+            throw new AggregateException("One or more committed journals could not be applied.", failures);
+    }
+
+    private async Task HandlePreWitnessFailure(Exception prepareException, JournalCommitFailureMode onFailure)
+    {
+        if (onFailure != JournalCommitFailureMode.RollbackIfSafe)
+            return;
+
+        JournalWitness? observedWitness;
+        try
+        {
+            observedWitness = await _witnessStore.ReadAsync(CancellationToken.None);
+        }
+        catch (Exception readException)
+        {
+            throw new AggregateException(
+                "Preparation failed and witness absence could not be confirmed.",
+                prepareException, readException);
+        }
+
+        if (observedWitness is not null)
+            return;
+
+        try
+        {
+            await RollbackParticipants(CancellationToken.None);
+        }
+        catch (Exception rollbackException)
+        {
+            throw new AggregateException("Preparation and safe rollback both failed.",
+                prepareException, rollbackException);
+        }
     }
 
     private async Task RollbackParticipants(CancellationToken cancellationToken)
@@ -387,6 +409,33 @@ public sealed class JournaledStreamCoordinator
             throw new AggregateException("One or more participants could not be rolled back.", failures);
     }
 
+    private JournalWitness CreateWitness(Guid preparationKey)
+    {
+        ulong[] nonces = _participants.Select(participant => participant.JournalNonce ??
+            throw new InvalidOperationException("A prepared participant has no journal nonce.")).ToArray();
+        return new JournalWitness(preparationKey, nonces);
+    }
+
+    private void ValidateWitnessParticipants(JournalWitness witness)
+    {
+        if (_participants.Length != witness.ParticipantNonces.Count ||
+            _participants.Any(participant =>
+                participant.State is not (JournaledStreamState.Prepared or
+                    JournaledStreamState.CommittedButNotApplied) ||
+                participant.PreparationKey != witness.PreparationKey ||
+                !participant.JournalNonce.HasValue))
+        {
+            throw new JournalRecoveryRequiredException(
+                "The supplied participants do not exactly match the durable journal witness.");
+        }
+
+        ulong[] actualNonces = _participants.Select(static participant => participant.JournalNonce!.Value).ToArray();
+        Array.Sort(actualNonces);
+        if (!actualNonces.AsSpan().SequenceEqual(witness.ParticipantNonceSpan))
+            throw new JournalRecoveryRequiredException(
+                "The supplied participants do not exactly match the durable journal witness.");
+    }
+
     private Guid? EnsureSinglePreparationKey()
     {
         Guid[] keys = _participants
@@ -399,6 +448,12 @@ public sealed class JournaledStreamCoordinator
 
         return keys.Length == 0 ? null : keys[0];
     }
+
+    private bool HasState(JournaledStreamState state) =>
+        _participants.Any(participant => participant.State == state);
+
+    private static InvalidOperationException LostWitnessException() => new(
+        "Prepared and committed participants cannot coexist without their durable witness.");
 
     private void EnsureOpenParticipants()
     {

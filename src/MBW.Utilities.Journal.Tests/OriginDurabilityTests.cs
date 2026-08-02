@@ -53,7 +53,7 @@ public class OriginDurabilityTests
     }
 
     [Fact]
-    public async Task CoordinatorRetainsWitnessWhenDurableOriginFlushFails()
+    public async Task CoordinatorClearsWitnessBeforeApplyingOrigins()
     {
         MemoryStream originData = new();
         FaultingFlushStream origin = new(originData);
@@ -69,7 +69,7 @@ public class OriginDurabilityTests
         await Assert.ThrowsAsync<IOException>(() => coordinator.CommitAsync());
 
         Assert.Equal(JournaledStreamState.CommittedButNotApplied, stream.State);
-        Assert.NotNull(witness.Value);
+        Assert.Null(witness.Value);
 
         origin.FailOnFlushAsync = false;
         await coordinator.RecoverAsync();

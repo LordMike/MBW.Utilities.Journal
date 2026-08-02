@@ -52,7 +52,7 @@ public class CoordinatorTests
             streamB.WriteStr("beta");
             await streamA.Prepare(key);
             await streamB.Prepare(key);
-            await witness.StoreAsync(key);
+            await witness.StoreAsync(WitnessFor(key, streamA, streamB));
             await streamA.Commit(key);
         }
 
@@ -63,7 +63,7 @@ public class CoordinatorTests
 
         Assert.Empty(originA.GetStream().ReadFullBytes());
         Assert.Empty(originB.GetStream().ReadFullBytes());
-        await JournaledStreamCoordinator.CreateAsync([reopenedA, reopenedB], witness);
+        await JournaledStreamCoordinator.CreateAsync([reopenedB, reopenedA], witness);
 
         Assert.Equal("alpha", originA.GetStream().ReadFullStr());
         Assert.Equal("beta", originB.GetStream().ReadFullStr());
@@ -126,19 +126,79 @@ public class CoordinatorTests
     }
 
     [Fact]
-    public async Task StaleWitnessIsClearedWhenEveryParticipantIsReady()
+    public async Task WitnessedRecoveryRejectsAnIncompleteParticipantSet()
     {
-        TestStream origin = new();
-        MemoryJournalStreamFactory journals = new();
+        TestStream originA = new();
+        TestStream originB = new();
+        MemoryJournalStreamFactory journalsA = new();
+        MemoryJournalStreamFactory journalsB = new();
         MemoryJournalWitnessStore witness = new();
         Guid key = Guid.NewGuid();
-        await witness.StoreAsync(key);
 
-        await using JournaledStream stream =
-            await JournaledStreamFactory.CreateWalJournal(origin.GetStream(), journals);
-        await JournaledStreamCoordinator.CreateAsync([stream], witness);
+        await using (JournaledStream streamA =
+                     await JournaledStreamFactory.CreateWalJournal(originA.GetStream(), journalsA))
+        await using (JournaledStream streamB =
+                     await JournaledStreamFactory.CreateWalJournal(originB.GetStream(), journalsB))
+        {
+            streamA.WriteStr("alpha");
+            streamB.WriteStr("beta");
+            await streamA.Prepare(key);
+            await streamB.Prepare(key);
+            await witness.StoreAsync(WitnessFor(key, streamA, streamB));
+        }
 
-        Assert.Null(witness.Value);
+        await using JournaledStream reopenedA = await JournaledStreamFactory.CreateWalJournal(
+            originA.GetStream(), journalsA, JournalOpenMode.Coordinated);
+        await Assert.ThrowsAsync<JournalRecoveryRequiredException>(() =>
+            JournaledStreamCoordinator.CreateAsync([reopenedA], witness));
+
+        Assert.NotNull(witness.Value);
+        Assert.Equal(JournaledStreamState.Prepared, reopenedA.State);
+        Assert.Empty(originA.GetStream().ReadFullBytes());
+        Assert.Empty(originB.GetStream().ReadFullBytes());
+    }
+
+    [Fact]
+    public async Task WitnessedRecoveryRejectsAWrongParticipantSetOfTheSameSize()
+    {
+        TestStream originA = new();
+        TestStream originB = new();
+        TestStream originC = new();
+        MemoryJournalStreamFactory journalsA = new();
+        MemoryJournalStreamFactory journalsB = new();
+        MemoryJournalStreamFactory journalsC = new();
+        MemoryJournalWitnessStore witness = new();
+        Guid key = Guid.NewGuid();
+
+        await using (JournaledStream streamA =
+                     await JournaledStreamFactory.CreateWalJournal(originA.GetStream(), journalsA))
+        await using (JournaledStream streamB =
+                     await JournaledStreamFactory.CreateWalJournal(originB.GetStream(), journalsB))
+        await using (JournaledStream streamC =
+                     await JournaledStreamFactory.CreateWalJournal(originC.GetStream(), journalsC))
+        {
+            streamA.WriteStr("alpha");
+            streamB.WriteStr("beta");
+            streamC.WriteStr("gamma");
+            await streamA.Prepare(key);
+            await streamB.Prepare(key);
+            await streamC.Prepare(key);
+            await witness.StoreAsync(WitnessFor(key, streamA, streamB));
+        }
+
+        await using JournaledStream reopenedA = await JournaledStreamFactory.CreateWalJournal(
+            originA.GetStream(), journalsA, JournalOpenMode.Coordinated);
+        await using JournaledStream reopenedC = await JournaledStreamFactory.CreateWalJournal(
+            originC.GetStream(), journalsC, JournalOpenMode.Coordinated);
+        await Assert.ThrowsAsync<JournalRecoveryRequiredException>(() =>
+            JournaledStreamCoordinator.CreateAsync([reopenedA, reopenedC], witness));
+
+        Assert.NotNull(witness.Value);
+        Assert.Equal(JournaledStreamState.Prepared, reopenedA.State);
+        Assert.Equal(JournaledStreamState.Prepared, reopenedC.State);
+        Assert.Empty(originA.GetStream().ReadFullBytes());
+        Assert.Empty(originB.GetStream().ReadFullBytes());
+        Assert.Empty(originC.GetStream().ReadFullBytes());
     }
 
     [Theory]
@@ -186,7 +246,7 @@ public class CoordinatorTests
     }
 
     [Fact]
-    public async Task CommittedMarkerCompletesRecoveryEvenWhenWitnessIsMissing()
+    public async Task MissingWitnessWithPreparedAndCommittedParticipantsFailsClosed()
     {
         TestStream originA = new();
         TestStream originB = new();
@@ -212,11 +272,14 @@ public class CoordinatorTests
         await using JournaledStream reopenedB = await JournaledStreamFactory.CreateWalJournal(
             originB.GetStream(), journalsB, JournalOpenMode.Coordinated);
 
-        await JournaledStreamCoordinator.CreateAsync(
-            [reopenedA, reopenedB], witness, JournalCoordinatorRecoveryMode.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            JournaledStreamCoordinator.CreateAsync(
+                [reopenedA, reopenedB], witness, JournalCoordinatorRecoveryMode.None));
 
-        Assert.Equal("alpha", originA.GetStream().ReadFullStr());
-        Assert.Equal("beta", originB.GetStream().ReadFullStr());
+        Assert.Empty(originA.GetStream().ReadFullBytes());
+        Assert.Empty(originB.GetStream().ReadFullBytes());
+        Assert.Equal(JournaledStreamState.CommittedButNotApplied, reopenedA.State);
+        Assert.Equal(JournaledStreamState.Prepared, reopenedB.State);
     }
 
     [Fact]
@@ -252,15 +315,67 @@ public class CoordinatorTests
         Assert.Null(witness.Value);
     }
 
+    [Fact]
+    public async Task ApplyWaitsUntilTheCompletedWitnessIsCleared()
+    {
+        TestStream origin = new();
+        MemoryJournalStreamFactory journals = new();
+        FailingClearWitness witness = new();
+        await using JournaledStream stream =
+            await JournaledStreamFactory.CreateWalJournal(origin.GetStream(), journals);
+        JournaledStreamCoordinator coordinator =
+            await JournaledStreamCoordinator.CreateAsync([stream], witness);
+        stream.WriteStr("pending");
+        witness.FailOnClear = true;
+
+        await Assert.ThrowsAsync<IOException>(() => coordinator.CommitAsync());
+
+        Assert.Equal(JournaledStreamState.CommittedButNotApplied, stream.State);
+        Assert.Empty(origin.GetStream().ReadFullBytes());
+        Assert.NotNull(witness.Value);
+
+        witness.FailOnClear = false;
+        await coordinator.RecoverAsync();
+        Assert.Equal("pending", origin.GetStream().ReadFullStr());
+        Assert.Null(witness.Value);
+    }
+
     private sealed class FailingStoreWitness : IJournalWitnessStore
     {
-        public ValueTask<Guid?> ReadAsync(CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<Guid?>(null);
+        public ValueTask<JournalWitness?> ReadAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<JournalWitness?>(null);
 
-        public ValueTask StoreAsync(Guid preparationKey, CancellationToken cancellationToken = default) =>
+        public ValueTask StoreAsync(JournalWitness witness, CancellationToken cancellationToken = default) =>
             ValueTask.FromException(new IOException("Injected witness failure"));
 
-        public ValueTask ClearAsync(Guid preparationKey, CancellationToken cancellationToken = default) =>
+        public ValueTask ClearAsync(JournalWitness witness, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
     }
+
+    private sealed class FailingClearWitness : IJournalWitnessStore
+    {
+        public JournalWitness? Value { get; private set; }
+        public bool FailOnClear { get; set; }
+
+        public ValueTask<JournalWitness?> ReadAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Value);
+
+        public ValueTask StoreAsync(JournalWitness witness, CancellationToken cancellationToken = default)
+        {
+            Value = witness;
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask ClearAsync(JournalWitness witness, CancellationToken cancellationToken = default)
+        {
+            if (FailOnClear)
+                return ValueTask.FromException(new IOException("Injected witness clear failure"));
+
+            Value = null;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private static JournalWitness WitnessFor(Guid preparationKey, params JournaledStream[] participants) =>
+        new(preparationKey, participants.Select(static participant => participant.JournalNonce!.Value));
 }

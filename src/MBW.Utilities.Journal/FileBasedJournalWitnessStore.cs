@@ -16,7 +16,7 @@ public sealed class FileBasedJournalWitnessStore : IJournalWitnessStore
         _file = file;
     }
 
-    public async ValueTask<Guid?> ReadAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<JournalWitness?> ReadAsync(CancellationToken cancellationToken = default)
     {
         FileStream stream;
         try
@@ -35,27 +35,26 @@ public sealed class FileBasedJournalWitnessStore : IJournalWitnessStore
 
         await using (stream)
         {
-            if (stream.Length != JournalWitnessRecord.Size)
+            if (stream.Length < JournalWitnessRecord.MinimumSize || stream.Length > int.MaxValue)
                 throw new InvalidDataException("The journal witness has an invalid length.");
 
-            byte[] record = new byte[JournalWitnessRecord.Size];
+            byte[] record = new byte[(int)stream.Length];
             await stream.ReadExactlyAsync(record, cancellationToken);
             return JournalWitnessRecord.Read(record);
         }
     }
 
-    public async ValueTask StoreAsync(Guid preparationKey, CancellationToken cancellationToken = default)
+    public async ValueTask StoreAsync(JournalWitness witness, CancellationToken cancellationToken = default)
     {
-        if (preparationKey == Guid.Empty)
-            throw new ArgumentException("The preparation key must not be empty", nameof(preparationKey));
+        ArgumentNullException.ThrowIfNull(witness);
 
-        Guid? existing = await ReadAsync(cancellationToken);
-        if (existing.HasValue)
+        JournalWitness? existing = await ReadAsync(cancellationToken);
+        if (existing is not null)
         {
-            if (existing.Value == preparationKey)
+            if (existing.ValueEquals(witness))
                 return;
 
-            throw new InvalidOperationException("The witness belongs to another prepared transaction.");
+            throw new InvalidOperationException("A different journal witness already exists.");
         }
 
         string? directory = Path.GetDirectoryName(_file);
@@ -65,7 +64,7 @@ public sealed class FileBasedJournalWitnessStore : IJournalWitnessStore
         string temporaryFile = _file + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            byte[] record = JournalWitnessRecord.Create(preparationKey);
+            byte[] record = JournalWitnessRecord.Create(witness);
             await using (FileStream stream = new FileStream(temporaryFile, FileMode.CreateNew,
                              FileAccess.Write, FileShare.None, 4096,
                              FileOptions.Asynchronous | FileOptions.WriteThrough))
@@ -81,8 +80,8 @@ public sealed class FileBasedJournalWitnessStore : IJournalWitnessStore
             }
             catch (IOException)
             {
-                Guid? racedValue = await ReadAsync(cancellationToken);
-                if (racedValue != preparationKey)
+                JournalWitness? racedValue = await ReadAsync(cancellationToken);
+                if (racedValue is null || !racedValue.ValueEquals(witness))
                     throw;
             }
         }
@@ -101,16 +100,15 @@ public sealed class FileBasedJournalWitnessStore : IJournalWitnessStore
         }
     }
 
-    public async ValueTask ClearAsync(Guid preparationKey, CancellationToken cancellationToken = default)
+    public async ValueTask ClearAsync(JournalWitness witness, CancellationToken cancellationToken = default)
     {
-        if (preparationKey == Guid.Empty)
-            throw new ArgumentException("The preparation key must not be empty", nameof(preparationKey));
+        ArgumentNullException.ThrowIfNull(witness);
 
-        Guid? existing = await ReadAsync(cancellationToken);
-        if (!existing.HasValue)
+        JournalWitness? existing = await ReadAsync(cancellationToken);
+        if (existing is null)
             return;
-        if (existing.Value != preparationKey)
-            throw new InvalidOperationException("The witness belongs to another prepared transaction.");
+        if (!existing.ValueEquals(witness))
+            throw new InvalidOperationException("The stored journal witness does not match.");
 
         File.Delete(_file);
     }

@@ -27,7 +27,9 @@ the `CommitAndApply()` convenience extension shown above, to update the origin.
 For an atomic commit across multiple streams, open every stream with
 `JournalOpenMode.Coordinated`, create a `JournaledStreamCoordinator` with a shared
 `IJournalWitnessStore`, then write through the streams and call `CommitAsync()` on the
-coordinator. Recovery must use the same fixed participant set and witness store.
+coordinator. The witness records the preparation key and complete journal nonce set, so
+recovery must supply that exact fixed participant set. Once every commit marker is durable,
+the witness is cleared and each journal can be applied independently.
 
 More extended examples:
 * The canonical initialization and recovery sequences for a single journaled file and a

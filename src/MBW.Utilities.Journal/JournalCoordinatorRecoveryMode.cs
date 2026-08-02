@@ -12,7 +12,8 @@ public enum JournalCoordinatorRecoveryMode
     None = 0,
 
     /// <summary>
-    /// Commit and apply prepared participants when their shared key matches the durable witness.
+    /// Commit the exact participant nonce set recorded by the durable witness, clear the witness after every marker is
+    /// committed, and then apply the journals independently.
     /// </summary>
     CommitWitnessed = 1,
 

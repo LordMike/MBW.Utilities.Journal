@@ -3,42 +3,40 @@ namespace MBW.Utilities.Journal.Tests.Helpers;
 
 internal sealed class MemoryJournalWitnessStore : IJournalWitnessStore
 {
-    public Guid? Value { get; private set; }
+    public JournalWitness? Value { get; private set; }
 
-    public ValueTask<Guid?> ReadAsync(CancellationToken cancellationToken = default)
+    public ValueTask<JournalWitness?> ReadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return ValueTask.FromResult(Value);
     }
 
-    public ValueTask StoreAsync(Guid preparationKey, CancellationToken cancellationToken = default)
+    public ValueTask StoreAsync(JournalWitness witness, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (preparationKey == Guid.Empty)
-            throw new ArgumentException("The preparation key must not be empty", nameof(preparationKey));
+        ArgumentNullException.ThrowIfNull(witness);
 
-        Guid? existing = Value;
-        if (existing.HasValue)
+        JournalWitness? existing = Value;
+        if (existing is not null)
         {
-            if (existing.Value == preparationKey)
+            if (existing.ValueEquals(witness))
                 return ValueTask.CompletedTask;
 
-            throw new InvalidOperationException("The witness belongs to another prepared transaction.");
+            throw new InvalidOperationException("A different journal witness already exists.");
         }
 
-        Value = preparationKey;
+        Value = witness;
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask ClearAsync(Guid preparationKey, CancellationToken cancellationToken = default)
+    public ValueTask ClearAsync(JournalWitness witness, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (preparationKey == Guid.Empty)
-            throw new ArgumentException("The preparation key must not be empty", nameof(preparationKey));
+        ArgumentNullException.ThrowIfNull(witness);
 
-        Guid? existing = Value;
-        if (existing.HasValue && existing.Value != preparationKey)
-            throw new InvalidOperationException("The witness belongs to another prepared transaction.");
+        JournalWitness? existing = Value;
+        if (existing is not null && !existing.ValueEquals(witness))
+            throw new InvalidOperationException("The stored journal witness does not match.");
 
         Value = null;
         return ValueTask.CompletedTask;

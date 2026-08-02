@@ -95,7 +95,8 @@ public class JournaledStreamExamples
             streamB.Write("ledger recovery"u8);
             await streamA.Prepare(witnessedKey);
             await streamB.Prepare(witnessedKey);
-            await new FileBasedJournalWitnessStore(witnessPath).StoreAsync(witnessedKey);
+            await new FileBasedJournalWitnessStore(witnessPath).StoreAsync(new JournalWitness(
+                witnessedKey, [streamA.JournalNonce!.Value, streamB.JournalNonce!.Value]));
         }
 
         await using (FileStream originA = OpenOrigin(originAPath))
@@ -126,7 +127,8 @@ public class JournaledStreamExamples
             streamA.Write(" + current"u8);
             streamB.Write(" + current"u8);
 
-            // CommitAsync prepares and witnesses every participant before applying any origin.
+            // CommitAsync prepares and witnesses every participant, commits every durable marker,
+            // clears the witness, and only then applies the origins independently.
             // The same startup sequence above can finish this operation after an interruption.
             await coordinator.CommitAsync();
         }

@@ -22,6 +22,7 @@ public sealed class JournaledStream : Stream
     private long _virtualOffset;
     private long _virtualLength;
     private Guid? _preparationKey;
+    private ulong? _journalNonce;
     private bool _journalFinalized;
     private bool _recoveryOnlyDirty;
     private bool _allowUnkeyedCommit;
@@ -65,6 +66,7 @@ public sealed class JournaledStream : Stream
         _journalFactory = journalFactory;
         _journalStream = journalStream;
         _journal = journal;
+        _journalNonce = header.Nonce;
         _virtualOffset = 0;
 
         if ((header.Flags & JournalHeaderFlags.Prepared) == 0)
@@ -95,6 +97,8 @@ public sealed class JournaledStream : Stream
     /// Gets the durable preparation key for a prepared or committed journal.
     /// </summary>
     public Guid? PreparationKey => _preparationKey;
+
+    internal ulong? JournalNonce => _journalNonce;
 
     /// <summary>
     /// Finalizes the journal under a coordination key without making the commit decision durable.
@@ -419,6 +423,7 @@ public sealed class JournaledStream : Stream
             throw new InvalidOperationException("Unable to open a journal stream");
 
         _journal = _journalFactory.Create(_origin, _journalStream);
+        _journalNonce = ReadHeaderForUpdate().Nonce;
         _state = JournaledStreamState.Dirty;
     }
 
@@ -432,7 +437,10 @@ public sealed class JournaledStream : Stream
             _journalStream = null;
 
             if (discard)
+            {
                 _journalStreamFactory.Delete(string.Empty);
+                _journalNonce = null;
+            }
         }
     }
 
